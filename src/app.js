@@ -18,6 +18,8 @@ import facultyRoutes from './routes/faculty.routes.js';
 import coordinatorRoutes from './routes/coordinator.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import staffRoutes from './routes/staff.routes.js';
+import uploadRoutes from './routes/upload.routes.js';
+
 
 const app = express();
 
@@ -56,6 +58,9 @@ app.use('/api/faculty', facultyRoutes);
 app.use('/api/coordinator', coordinatorRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/v1/upload', uploadRoutes);
+
 
 // Fallback 404 handler
 app.use((req, res, next) => {

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { getAdminDashboard, getAdminStatistics, createEvent, updateEvent, deleteEvent, createCategory, getCategories, updateCategory, deleteCategory, getStudents, getStudentById, updateStudent, deleteStudent, createStaff, getStaffList, updateStaff, deleteStaff, getPayments, getPaymentById, refundPayment, getAuditLogs, getBlockedUsers, blockUser, unblockUser, createAnnouncement, getAnnouncements, addToGallery, removeFromGallery, getEventsReport, getPaymentsReport, getWinnersReport } from '../controllers/admin.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
+import { uploadSingleImage } from '../middlewares/upload.middleware.js';
+
 
 const router = Router();
 
@@ -47,7 +49,8 @@ router.put('/security/block-user/:id', blockUser);
 router.put('/security/unblock-user/:id', unblockUser);
 
 // Gallery management
-router.post('/gallery', addToGallery);
+router.post('/gallery', uploadSingleImage('image'), addToGallery);
+
 router.delete('/gallery/:id', removeFromGallery);
 
 // Announcement broadacasts

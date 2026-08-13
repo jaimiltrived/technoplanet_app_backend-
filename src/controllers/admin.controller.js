@@ -4,6 +4,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../utils/customErrors.js';
 import { sendResponse } from '../utils/response.js';
 import { z } from 'zod';
+import { uploadToCloudinary } from '../utils/cloudinary.js';
 
 // ==========================================
 // 1. DASHBOARD & STATISTICS APIs
@@ -433,13 +434,27 @@ const getAnnouncements = asyncHandler(async (req, res, next) => {
 });
 
 const addToGallery = asyncHandler(async (req, res, next) => {
+  let imageUrl = req.body.imageUrl;
+  const imageInput = req.file ? req.file.buffer : req.body.imageUrl;
+
+  if (imageInput && (req.file || (typeof imageInput === 'string' && (imageInput.startsWith('data:image/') || !imageInput.startsWith('http'))))) {
+    const uploadResult = await uploadToCloudinary(imageInput, {
+      folder: 'rku_app/gallery',
+      mimetype: req.file?.mimetype
+    });
+    imageUrl = uploadResult.secure_url;
+  }
+
   const schema = z.object({
     imageUrl: z.string().url(),
     description: z.string().optional(),
-    year: z.number().int()
+    year: z.coerce.number().int()
   });
 
-  const data = schema.parse(req.body);
+  const data = schema.parse({
+    ...req.body,
+    ...(imageUrl && { imageUrl })
+  });
 
   const gallery = await prisma.gallery.create({
     data
@@ -447,6 +462,7 @@ const addToGallery = asyncHandler(async (req, res, next) => {
 
   return sendResponse(res, 201, 'Image added to gallery successfully', gallery);
 });
+
 
 const removeFromGallery = asyncHandler(async (req, res, next) => {
   const { id } = req.params;

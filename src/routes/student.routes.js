@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { getDashboard, getNotifications, getScores, getScoreByEvent, getRankByEvent, getLeaderboardByEvent } from '../controllers/student-features.controller.js';
+import { getStudentProfile, updateStudentProfile } from '../controllers/student.controller.js';
+import { uploadSingleImage } from '../middlewares/upload.middleware.js';
 import { authenticate } from '../middlewares/auth.js';
 
 const router = Router();
@@ -7,6 +9,11 @@ const router = Router();
 // Apply auth check to all routes in student domain
 router.use(authenticate);
 
+// Profile routes
+router.get('/profile', getStudentProfile);
+router.put('/profile', uploadSingleImage('profilePic'), updateStudentProfile);
+
+// Student features routes
 router.get('/dashboard', getDashboard);
 router.get('/notifications', getNotifications);
 router.get('/scores', getScores);
