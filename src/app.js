@@ -36,6 +36,17 @@ app.get('/api-docs/swagger.json', (req, res) => {
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+// Root Welcome / API Status Route
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Welcome to RKU Technoplanet API',
+    version: '1.0.0',
+    documentation: '/api-docs',
+    health: '/health'
+  });
+});
+
 // Health Check API
 app.get('/health', (req, res) => {
   res.status(200).json({
