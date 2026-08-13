@@ -1,0 +1,206 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  FACULTY
+  VOLUNTEER
+}
+
+enum RegistrationStatus {
+  PENDING
+  REGISTERED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  NOT_MARKED
+  PRESENT
+  ABSENT
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model Student {
+  id              String         @id @default(uuid())
+  email           String         @unique
+  password        String
+  name            String
+  phone           String?
+  rollNo          String         @unique
+  department      String
+  semester        Int
+  profilePic      String?
+  isEmailVerified Boolean        @default(false)
+  otpCode         String?
+  otpExpires      DateTime?
+  refreshToken    String?        @db.VarChar(500)
+  blocked         Boolean        @default(false)
+  blockedReason   String?        @db.Text
+  registrations   Registration[]
+  feedbacks       Feedback[]
+  scores          Score[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Staff {
+  id                 String         @id @default(uuid())
+  email              String         @unique
+  password           String
+  name               String
+  phone              String?
+  role               Role           @default(FACULTY)
+  isEmailVerified    Boolean        @default(false)
+  otpCode            String?
+  otpExpires         DateTime?
+  refreshToken       String?        @db.VarChar(500)
+  blocked            Boolean        @default(false)
+  blockedReason      String?        @db.Text
+  assignedEvents     Event[]        @relation("EventCoordinator")
+  volunteeredEvents  Event[]        @relation("EventVolunteers")
+  sentAnnouncements  Announcement[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?  @db.Text
+  events      Event[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Event {
+  id                   String         @id @default(uuid())
+  title                String
+  description          String         @db.Text
+  categoryId           String
+  category             Category       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  coordinatorId        String
+  coordinator          Staff          @relation("EventCoordinator", fields: [coordinatorId], references: [id])
+  volunteers           Staff[]        @relation("EventVolunteers")
+  date                 DateTime
+  time                 String
+  venue                String
+  maxParticipants      Int
+  registrationFee      Decimal        @db.Decimal(10, 2)
+  registrationDeadline DateTime
+  isCompleted          Boolean        @default(false)
+  scoresEntered        Boolean        @default(false)
+  rankingsDeclared     Boolean        @default(false)
+  registrations        Registration[]
+  scores               Score[]
+  announcements        Announcement[]
+  feedbacks            Feedback[]
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+}
+
+model Registration {
+  id               String             @id @default(uuid())
+  studentId        String
+  student          Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  eventId          String
+  event            Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  status           RegistrationStatus @default(PENDING)
+  registrationDate DateTime           @default(now())
+  attendance       AttendanceStatus   @default(NOT_MARKED)
+  qrCodePass       String             @unique
+  payment          Payment?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([studentId, eventId])
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  registrationId String        @unique
+  registration   Registration  @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  amount         Decimal       @db.Decimal(10, 2)
+  status         PaymentStatus @default(PENDING)
+  transactionId  String?       @unique
+  paymentMethod  String?
+  receiptUrl     String?
+  paymentDate    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model Score {
+  id             String   @id @default(uuid())
+  eventId        String
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  points         Decimal  @db.Decimal(5, 2)
+  rank           Int?
+  certificateUrl String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([eventId, studentId])
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  eventId   String?
+  event     Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title     String
+  message   String   @db.Text
+  sentById  String
+  sentBy    Staff    @relation(fields: [sentById], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Gallery {
+  id          String   @id @default(uuid())
+  imageUrl    String
+  description String?  @db.Text
+  year        Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model FAQ {
+  id        String   @id @default(uuid())
+  question  String   @db.Text
+  answer    String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Feedback {
+  id        String   @id @default(uuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  message   String   @db.Text
+  rating    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String
+  userRole  String
+  action    String
+  details   String   @db.Text
+  createdAt DateTime @default(now())
+}
