@@ -46,4 +46,16 @@ describe('API Health & System Status Tests', () => {
     const res = await fetch(`${baseUrl}/unknown-route-xyz`);
     assert.strictEqual(res.status, 404);
   });
+
+  test('POST /deploy-webhook should return 200 success', async () => {
+    const res = await fetch(`${baseUrl}/deploy-webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: 'refs/heads/main' })
+    });
+    assert.strictEqual(res.status, 200);
+
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
+  });
 });
