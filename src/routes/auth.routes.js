@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { login, logout, refresh, forgotPassword, verifyOtp, resendOtp, resetPassword, changePassword, getProfile, updateProfile, registerStudent, registerStaff } from '../controllers/auth.controller.js';
-import { authenticate } from '../middlewares/auth.js';
+import { authenticate, authorize } from '../middlewares/auth.js';
 
 const router = Router();
 
@@ -12,9 +12,9 @@ router.post('/verify-otp', verifyOtp);
 router.post('/resend-otp', resendOtp);
 router.post('/reset-password', resetPassword);
 
-// Registration helpers for dev
+// Registration helpers
 router.post('/register-student', registerStudent);
-router.post('/register-staff', registerStaff);
+router.post('/register-staff', authenticate, authorize(['ADMIN']), registerStaff);
 
 // Protected routes
 router.post('/logout', authenticate, logout);

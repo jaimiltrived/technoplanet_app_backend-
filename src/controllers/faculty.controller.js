@@ -119,16 +119,17 @@ const getEventParticipants = asyncHandler(async (req, res, next) => {
   }
 
   const { eventId } = req.params;
-  const { search } = req.query;
+  const rawSearch = req.query.search;
+  const search = rawSearch ? String(rawSearch).trim().slice(0, 100) : null;
   await checkEventOwnership(eventId, req.user.id);
 
   const searchFilter = search
     ? {
         student: {
           OR: [
-            { name: { contains: String(search) } },
-            { rollNo: { contains: String(search) } },
-            { email: { contains: String(search) } }
+            { name: { contains: search } },
+            { rollNo: { contains: search } },
+            { email: { contains: search } }
           ]
         }
       }

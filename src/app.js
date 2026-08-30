@@ -25,7 +25,30 @@ import deployRoutes from './routes/deploy.routes.js';
 const app = express();
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, curl, server-to-server)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    const allowedList = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://localhost:8080')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    // In development, allow any localhost or 127.0.0.1 port (e.g. Flutter Web)
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    const isDev = process.env.NODE_ENV !== 'production';
+
+    if ((isDev && isLocalhost) || allowedList.includes(origin) || allowedList.includes('*')) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

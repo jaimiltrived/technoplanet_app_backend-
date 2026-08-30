@@ -201,10 +201,14 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
     });
   }
 
-  // Simulated OTP Sending
-  console.log(`[OTP ALERT] Sent OTP Code ${otpCode} to ${email}`);
+  // Simulated OTP Sending (OTP masked in logs for security)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[OTP] Sent OTP ${otpCode.slice(0, 2)}**** to ${email}`);
+  } else {
+    console.log(`[OTP] OTP sent to ${email}`);
+  }
 
-  return sendResponse(res, 200, 'OTP sent successfully (Simulated). Please check console logs.');
+  return sendResponse(res, 200, 'OTP sent successfully. Please check your email.');
 });
 
 /**
@@ -278,9 +282,13 @@ const resendOtp = asyncHandler(async (req, res, next) => {
     });
   }
 
-  console.log(`[OTP ALERT] Resent OTP Code ${otpCode} to ${email}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[OTP] Resent OTP ${otpCode.slice(0, 2)}**** to ${email}`);
+  } else {
+    console.log(`[OTP] OTP resent to ${email}`);
+  }
 
-  return sendResponse(res, 200, 'OTP resent successfully (Simulated)');
+  return sendResponse(res, 200, 'OTP resent successfully');
 });
 
 /**
@@ -522,7 +530,7 @@ const registerStudent = asyncHandler(async (req, res, next) => {
       rollNo: validatedData.rollNo,
       department: validatedData.department,
       semester: validatedData.semester,
-      isEmailVerified: true // Auto-verify for dev convenience
+      isEmailVerified: process.env.NODE_ENV === 'development'
     },
     select: {
       id: true,

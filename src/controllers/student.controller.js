@@ -46,6 +46,7 @@ const updateStudentProfile = asyncHandler(async (req, res, next) => {
   }
 
   const { name, phone, department, semester } = req.body;
+  let profilePic;
   const imageInput = req.file ? req.file.buffer : req.body.profilePic;
 
   if (imageInput && (req.file || (typeof imageInput === 'string' && (imageInput.startsWith('data:image/') || !imageInput.startsWith('http'))))) {

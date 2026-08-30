@@ -14,7 +14,16 @@ export const uploadImage = asyncHandler(async (req, res, next) => {
     throw new BadRequestError('No image file or base64 image data provided');
   }
 
-  const folder = req.body.folder || 'rku_app/general';
+  let folder = 'rku_app/general';
+  if (req.body.folder) {
+    const rawFolder = String(req.body.folder).trim();
+    // Validate folder format: only alphanumeric, underscores, hyphens, and single forward slashes (no ../)
+    if (/^[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_-]+)*$/.test(rawFolder) && !rawFolder.includes('..')) {
+      folder = rawFolder.startsWith('rku_app') ? rawFolder : `rku_app/${rawFolder}`;
+    } else {
+      throw new BadRequestError('Invalid folder name: path traversal or invalid characters detected');
+    }
+  }
   const mimetype = req.file?.mimetype;
 
   const result = await uploadToCloudinary(fileInput, {

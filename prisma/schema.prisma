@@ -99,6 +99,9 @@ model Event {
   registrationFee      Decimal        @db.Decimal(10, 2)
   registrationDeadline DateTime
   isCompleted          Boolean        @default(false)
+  isTeamEvent          Boolean        @default(false)
+  minTeamSize          Int            @default(1)
+  maxTeamSize          Int            @default(1)
   scoresEntered        Boolean        @default(false)
   rankingsDeclared     Boolean        @default(false)
   registrations        Registration[]
@@ -122,6 +125,15 @@ model Registration {
   payment          Payment?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
+
+  // Form Fields
+  fullName         String?
+  enrollmentNumber String?
+  collegeName      String?
+  department       String?
+  branch           String?
+  semester         String?
+  phoneNumber      String?
 
   @@unique([studentId, eventId])
 }

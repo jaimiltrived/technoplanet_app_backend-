@@ -4,12 +4,9 @@ import { BadRequestError, ConflictError, NotFoundError } from '../utils/customEr
 import { sendResponse } from '../utils/response.js';
 import { z } from 'zod';
 
-/**
- * @desc Get all events with optional filters (categoryId, status, search)
- * @route GET /api/events
- */
+
 const getEvents = asyncHandler(async (req, res, next) => {
-  const { categoryId, status, search } = req.query;
+  const { categoryId, status, search, coordinatorId } = req.query;
 
   const whereClause = {};
 
@@ -17,16 +14,30 @@ const getEvents = asyncHandler(async (req, res, next) => {
     whereClause.categoryId = String(categoryId);
   }
 
+  if (coordinatorId) {
+    whereClause.coordinatorId = String(coordinatorId);
+  }
+
   if (status === 'upcoming') {
     whereClause.date = { gt: new Date() };
+    whereClause.isCompleted = false;
+  } else if (status === 'ongoing') {
+    const now = new Date();
+    whereClause.isCompleted = false;
+    whereClause.AND = [
+      { date: { lte: now } },
+      { registrationDeadline: { gte: now } }
+    ];
   } else if (status === 'completed') {
     whereClause.isCompleted = true;
   }
 
   if (search) {
+    const cleanSearch = String(search).trim().slice(0, 100);
     whereClause.OR = [
-      { title: { contains: String(search) } },
-      { description: { contains: String(search) } }
+      { title: { contains: cleanSearch } },
+      { description: { contains: cleanSearch } },
+      { venue: { contains: cleanSearch } }
     ];
   }
 
@@ -37,7 +48,11 @@ const getEvents = asyncHandler(async (req, res, next) => {
         select: { name: true }
       },
       coordinator: {
-        select: { name: true, email: true }
+        select: { id: true, name: true, email: true }
+      },
+      registrations: {
+        where: { status: { not: 'CANCELLED' } },
+        select: { id: true, status: true }
       }
     },
     orderBy: { date: 'asc' }
@@ -95,17 +110,18 @@ const getEventsByCategory = asyncHandler(async (req, res, next) => {
  * @route GET /api/events/search
  */
 const searchEvents = asyncHandler(async (req, res, next) => {
-  const { q } = req.query;
-
+  const q = req.query.q || req.query.search;
   if (!q) {
     throw new BadRequestError('Search query is required');
   }
 
+  const cleanQ = String(q).trim().slice(0, 100);
+
   const events = await prisma.event.findMany({
     where: {
       OR: [
-        { title: { contains: String(q) } },
-        { description: { contains: String(q) } }
+        { title: { contains: cleanQ } },
+        { description: { contains: cleanQ } }
       ]
     },
     include: {
@@ -125,7 +141,25 @@ const registerForEvent = asyncHandler(async (req, res, next) => {
     throw new BadRequestError('Only students can register for events');
   }
 
-  const { eventId } = z.object({ eventId: z.string() }).parse(req.body);
+  const { 
+    eventId, 
+    fullName, 
+    enrollmentNumber, 
+    collegeName, 
+    department, 
+    branch, 
+    semester, 
+    phoneNumber 
+  } = z.object({ 
+    eventId: z.string(),
+    fullName: z.string().optional(),
+    enrollmentNumber: z.string().optional(),
+    collegeName: z.string().optional(),
+    department: z.string().optional(),
+    branch: z.string().optional(),
+    semester: z.string().optional(),
+    phoneNumber: z.string().optional()
+  }).parse(req.body);
   const studentId = req.user.id;
 
   // 1. Fetch event details
@@ -173,7 +207,14 @@ const registerForEvent = asyncHandler(async (req, res, next) => {
       data: {
         status: registrationFee > 0 ? 'PENDING' : 'REGISTERED',
         qrCodePass,
-        registrationDate: new Date()
+        registrationDate: new Date(),
+        fullName,
+        enrollmentNumber,
+        collegeName,
+        department,
+        branch,
+        semester,
+        phoneNumber
       }
     });
   } else {
@@ -182,7 +223,14 @@ const registerForEvent = asyncHandler(async (req, res, next) => {
         studentId,
         eventId,
         qrCodePass,
-        status: registrationFee > 0 ? 'PENDING' : 'REGISTERED'
+        status: registrationFee > 0 ? 'PENDING' : 'REGISTERED',
+        fullName,
+        enrollmentNumber,
+        collegeName,
+        department,
+        branch,
+        semester,
+        phoneNumber
       }
     });
   }

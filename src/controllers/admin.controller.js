@@ -47,9 +47,18 @@ const getAdminStatistics = asyncHandler(async (req, res, next) => {
     }
   });
 
+  const totalEvents = await prisma.event.count();
+  const totalFaculty = await prisma.staff.count({ where: { role: 'FACULTY' } });
+  const totalVolunteers = await prisma.staff.count({ where: { role: 'VOLUNTEER' } });
+  const totalStudents = await prisma.student.count();
+
   return sendResponse(res, 200, 'System-wide statistics retrieved successfully', {
     totalRevenue,
-    categoryStats: categoryStats.map(c => ({ category: c.name, count: c._count.events }))
+    categoryStats: categoryStats.map(c => ({ category: c.name, count: c._count.events })),
+    totalEvents,
+    totalFaculty,
+    totalVolunteers,
+    totalStudents
   });
 });
 
@@ -68,7 +77,10 @@ const createEvent = asyncHandler(async (req, res, next) => {
     venue: z.string(),
     maxParticipants: z.number().int().min(1),
     registrationFee: z.number().min(0),
-    registrationDeadline: z.string().transform((val) => new Date(val))
+    registrationDeadline: z.string().transform((val) => new Date(val)),
+    isTeamEvent: z.boolean().default(false),
+    minTeamSize: z.number().int().min(1).default(1),
+    maxTeamSize: z.number().int().min(1).default(1)
   });
 
   const data = schema.parse(req.body);
@@ -106,7 +118,10 @@ const updateEvent = asyncHandler(async (req, res, next) => {
     maxParticipants: z.number().int().min(1).optional(),
     registrationFee: z.number().min(0).optional(),
     registrationDeadline: z.string().transform((val) => new Date(val)).optional(),
-    isCompleted: z.boolean().optional()
+    isCompleted: z.boolean().optional(),
+    isTeamEvent: z.boolean().optional(),
+    minTeamSize: z.number().int().min(1).optional(),
+    maxTeamSize: z.number().int().min(1).optional()
   });
 
   const data = schema.parse(req.body);

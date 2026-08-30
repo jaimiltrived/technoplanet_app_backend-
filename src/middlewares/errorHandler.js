@@ -44,8 +44,13 @@ const errorHandler = (
       details = prismaErr.message;
     }
   } else {
-    // Log unexpected errors
-    console.error('Unhandled Error:', err);
+    // Log unexpected errors with timestamp and structured output
+    const timestamp = new Date().toISOString();
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`[${timestamp}] Unhandled Server Error: ${err.message || err}`);
+    } else {
+      console.error(`[${timestamp}] Unhandled Error:`, err);
+    }
   }
 
   res.status(statusCode).json({
