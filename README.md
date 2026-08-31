@@ -72,7 +72,7 @@ bash scripts/deploy-server.sh
 
 ---
 
-## 🐳 Docker Setup
+
 
 ```bash
 # Run API and MySQL using Docker Compose

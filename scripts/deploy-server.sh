@@ -34,13 +34,12 @@ if command -v pm2 &> /dev/null; then
   pm2 reload rku-backend || pm2 start src/server.js --name rku-backend
   pm2 save
   echo "✅ PM2 process restarted successfully!"
-elif command -v docker &> /dev/null && [ -f "docker-compose.yml" ]; then
-  echo "🐳 Rebuilding Docker container stack..."
-  docker compose up -d --build
-  echo "✅ Docker containers updated successfully!"
 else
-  echo "⚠️ PM2 or Docker not detected. Please restart server process manually or install PM2."
+  echo "⚠️ PM2 not detected. Please restart server process manually or install PM2."
 fi
+# Docker detection removed
+# echo "⚠️ PM2 or Docker not detected. Please restart server process manually or install PM2."
+# fi
 
 echo "========================================================"
 echo "🎉 Deployment Complete!"

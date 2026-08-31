@@ -39,7 +39,7 @@ jobs:
       - name: Run API Health & Unit Tests
         run: npm test
 
-  docker-build:
+
     name: Docker Image Build & Verification
     needs: lint-and-test
     runs-on: ubuntu-latest
@@ -60,7 +60,7 @@ jobs:
 
   deploy:
     name: Continuous Deployment (https://api.techno.rku.ac.in/)
-    needs: [lint-and-test, docker-build]
+    needs: [lint-and-test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
