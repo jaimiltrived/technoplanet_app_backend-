@@ -19,7 +19,6 @@ import coordinatorRoutes from './routes/coordinator.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import staffRoutes from './routes/staff.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
-import deployRoutes from './routes/deploy.routes.js';
 
 
 const app = express();
@@ -95,10 +94,6 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/v1/upload', uploadRoutes);
-
-// Automated Webhook Deployment route
-app.use('/deploy-webhook', deployRoutes);
-app.use('/api/deploy-webhook', deployRoutes);
 
 
 // Fallback 404 handler
