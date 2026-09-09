@@ -46,4 +46,23 @@ describe('API Health & System Status Tests', () => {
     const res = await fetch(`${baseUrl}/unknown-route-xyz`);
     assert.strictEqual(res.status, 404);
   });
+
+  test('CORS: Should allow origin https://api.techno.rku.ac.in and respond to OPTIONS', async () => {
+    const res = await fetch(`${baseUrl}/health`, {
+      method: 'OPTIONS',
+      headers: {
+        'Origin': 'https://api.techno.rku.ac.in',
+        'Access-Control-Request-Method': 'POST',
+      },
+    });
+    assert.strictEqual(res.headers.get('access-control-allow-origin'), 'https://api.techno.rku.ac.in');
+  });
+
+  test('Swagger: /api-docs/swagger.json should contain relative / server', async () => {
+    const res = await fetch(`${baseUrl}/api-docs/swagger.json`);
+    assert.strictEqual(res.status, 200);
+    const spec = await res.json();
+    assert.ok(spec.servers.some(s => s.url === '/'));
+    assert.ok(spec.servers.some(s => s.url === 'https://api.techno.rku.ac.in'));
+  });
 });

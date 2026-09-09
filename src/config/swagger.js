@@ -14,6 +14,14 @@ const options = {
     },
     servers: [
       {
+        url: '/',
+        description: 'Current Server (Default / Relative)'
+      },
+      {
+        url: 'https://api.techno.rku.ac.in',
+        description: 'Production Live Server'
+      },
+      {
         url: 'http://localhost:5000',
         description: 'Local Development Server'
       },

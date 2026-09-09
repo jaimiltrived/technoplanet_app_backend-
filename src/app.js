@@ -24,30 +24,51 @@ import uploadRoutes from './routes/upload.routes.js';
 const app = express();
 
 // Middlewares
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, Postman, curl, server-to-server)
     if (!origin) {
       return callback(null, true);
     }
 
-    const allowedList = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://localhost:8080')
+    const defaultOrigins = [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:8080',
+      'http://localhost:5000',
+      'https://api.techno.rku.ac.in',
+      'https://techno.rku.ac.in',
+      'http://api.techno.rku.ac.in',
+      'http://techno.rku.ac.in'
+    ];
+
+    const envOrigins = (process.env.CORS_ORIGINS || '')
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
+
+    const allowedList = [...defaultOrigins, ...envOrigins];
 
     // In development, allow any localhost or 127.0.0.1 port (e.g. Flutter Web)
     const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
     const isDev = process.env.NODE_ENV !== 'production';
 
-    if ((isDev && isLocalhost) || allowedList.includes(origin) || allowedList.includes('*')) {
+    // Allow all *.rku.ac.in subdomains & domains
+    const isRkuDomain = /^https?:\/\/([a-zA-Z0-9-]+\.)*rku\.ac\.in(:\d+)?$/.test(origin);
+
+    if ((isDev && isLocalhost) || isRkuDomain || allowedList.includes(origin) || allowedList.includes('*')) {
       callback(null, true);
     } else {
       callback(null, false);
     }
   },
   credentials: true,
-}));
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
