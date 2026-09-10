@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { getEvents, getEventById, getEventsByCategory, searchEvents, registerForEvent, cancelRegistration, getMyEvents, getUpcomingEvents, getCompletedEvents } from '../controllers/event.controller.js';
+import { getEvents, getEventById, getEventsByCategory, searchEvents, registerForEvent, registerTeamForEvent, getTeamRegistrationById, cancelRegistration, getMyEvents, getUpcomingEvents, getCompletedEvents } from '../controllers/event.controller.js';
 import { authenticate } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
-import { idParamSchema, categoryIdParamSchema, eventRegistrationSchema, searchQuerySchema } from '../utils/validation.js';
+import { idParamSchema, categoryIdParamSchema, eventRegistrationSchema, teamRegistrationSchema, registrationIdParamSchema, searchQuerySchema } from '../utils/validation.js';
 
 const router = Router();
 
@@ -17,6 +17,10 @@ router.get('/', getEvents);
 
 // Registration routes
 router.post('/register', authenticate, validate({ body: eventRegistrationSchema }), registerForEvent);
+router.post('/register/team', authenticate, validate({ body: teamRegistrationSchema }), registerTeamForEvent);
+router.post('/team-register', authenticate, validate({ body: teamRegistrationSchema }), registerTeamForEvent);
+router.get('/team/:registrationId', authenticate, validate({ params: registrationIdParamSchema }), getTeamRegistrationById);
 router.delete('/register/:id', authenticate, validate({ params: idParamSchema }), cancelRegistration);
 
 export default router;
+

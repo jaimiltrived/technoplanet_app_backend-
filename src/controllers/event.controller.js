@@ -133,12 +133,252 @@ const searchEvents = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * @desc Register for an event
+ * @desc Register a team/group for an event
+ * @route POST /api/events/register/team
+ * @route POST /api/events/team-register
+ */
+const registerTeamForEvent = asyncHandler(async (req, res, next) => {
+  if (!req.user || req.user.role !== 'STUDENT') {
+    throw new BadRequestError('Only students can register for events');
+  }
+
+  const { 
+    eventId, 
+    teamName,
+    fullName, 
+    enrollmentNumber, 
+    collegeName, 
+    department, 
+    branch, 
+    semester, 
+    phoneNumber,
+    groupMembers,
+    teamMembers,
+    teamSize
+  } = z.object({ 
+    eventId: z.string().min(1, 'Event ID is required'),
+    teamName: z.string().min(2, 'Team name must be at least 2 characters').max(100),
+    fullName: z.string().max(100).optional(),
+    enrollmentNumber: z.string().max(50).optional(),
+    collegeName: z.string().max(200).optional(),
+    department: z.string().max(100).optional(),
+    branch: z.string().max(100).optional(),
+    semester: z.string().max(50).optional(),
+    phoneNumber: z.string().max(25).optional(),
+    groupMembers: z.array(z.any()).optional(),
+    teamMembers: z.array(z.any()).optional(),
+    teamSize: z.number().int().optional()
+  }).passthrough().parse(req.body);
+
+  const studentId = req.user.id;
+
+  // 1. Fetch event details
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: { registrations: true }
+  });
+
+  if (!event) {
+    throw new NotFoundError('Event not found');
+  }
+
+  // 2. Check if deadline has passed
+  if (new Date() > event.registrationDeadline) {
+    throw new BadRequestError('Registration deadline has passed for this event');
+  }
+
+  // 3. Process team members list (leader is 1st member)
+  const rawMembers = groupMembers || teamMembers || [];
+  const normalizedMembers = rawMembers.map((m, idx) => ({
+    memberNumber: idx + 2,
+    name: m.name || m.fullName || '',
+    enrollmentNo: m.enrollmentNo || m.enrollmentNumber || m.rollNo || '',
+    department: m.department || '',
+    branch: m.branch || '',
+    semester: m.semester || '',
+    phone: m.phone || m.phoneNumber || ''
+  })).filter(m => m.name || m.enrollmentNo);
+
+  const totalTeamSize = teamSize && teamSize > normalizedMembers.length 
+    ? teamSize 
+    : (1 + normalizedMembers.length);
+
+  // 4. Validate team constraints
+  if (event.isTeamEvent) {
+    if (event.minTeamSize && totalTeamSize < event.minTeamSize) {
+      throw new BadRequestError(`Minimum ${event.minTeamSize} members required for this team event (Current: ${totalTeamSize})`);
+    }
+    if (event.maxTeamSize && totalTeamSize > event.maxTeamSize) {
+      throw new BadRequestError(`Maximum team size is ${event.maxTeamSize} members for this event (Current: ${totalTeamSize})`);
+    }
+  }
+
+  // 5. Validate duplicate enrollment numbers
+  const leaderEnrollment = (enrollmentNumber || '').trim().toLowerCase();
+  for (const m of normalizedMembers) {
+    const memEnroll = (m.enrollmentNo || '').trim().toLowerCase();
+    if (memEnroll && leaderEnrollment && memEnroll === leaderEnrollment) {
+      throw new BadRequestError(`Team member "${m.name}" has the same enrollment number (${m.enrollmentNo}) as the team leader`);
+    }
+  }
+
+  const memberEnrollments = normalizedMembers.map(m => (m.enrollmentNo || '').trim().toLowerCase()).filter(Boolean);
+  if (new Set(memberEnrollments).size !== memberEnrollments.length) {
+    throw new BadRequestError('Duplicate enrollment numbers found among team members');
+  }
+
+  // 6. Check capacity
+  const activeRegistrations = event.registrations.filter(r => r.status !== 'CANCELLED');
+  if (activeRegistrations.length >= event.maxParticipants) {
+    throw new BadRequestError('Event has reached its maximum capacity');
+  }
+
+  // 7. Check if leader already registered
+  const existingReg = await prisma.registration.findUnique({
+    where: {
+      studentId_eventId: { studentId, eventId }
+    }
+  });
+
+  if (existingReg && existingReg.status !== 'CANCELLED') {
+    throw new ConflictError('You (team leader) are already registered for this event');
+  }
+
+  // 8. Generate QR Code Pass token
+  const qrCodePass = `PASS-TEAM-${studentId.substring(0, 8)}-${eventId.substring(0, 8)}-${Date.now()}`;
+
+  let registration;
+  const registrationFee = Number(event.registrationFee);
+
+  if (existingReg) {
+    registration = await prisma.registration.update({
+      where: { id: existingReg.id },
+      data: {
+        status: registrationFee > 0 ? 'PENDING' : 'REGISTERED',
+        qrCodePass,
+        registrationDate: new Date(),
+        fullName,
+        enrollmentNumber,
+        collegeName,
+        department,
+        branch,
+        semester,
+        phoneNumber,
+        isTeam: true,
+        teamName: teamName.trim(),
+        teamSize: totalTeamSize,
+        teamMembers: normalizedMembers,
+      }
+    });
+  } else {
+    registration = await prisma.registration.create({
+      data: {
+        studentId,
+        eventId,
+        qrCodePass,
+        status: registrationFee > 0 ? 'PENDING' : 'REGISTERED',
+        fullName,
+        enrollmentNumber,
+        collegeName,
+        department,
+        branch,
+        semester,
+        phoneNumber,
+        isTeam: true,
+        teamName: teamName.trim(),
+        teamSize: totalTeamSize,
+        teamMembers: normalizedMembers,
+      }
+    });
+  }
+
+  // 9. Create pending payment order if registration fee > 0
+  let paymentDetails = null;
+  if (registrationFee > 0) {
+    paymentDetails = await prisma.payment.create({
+      data: {
+        registrationId: registration.id,
+        amount: registrationFee,
+        status: 'PENDING'
+      }
+    });
+  }
+
+  return sendResponse(res, 201, registrationFee > 0 ? 'Team registration initiated. Payment pending.' : 'Team registered successfully for the event', {
+    registrationId: registration.id,
+    status: registration.status,
+    qrCodePass: registration.qrCodePass,
+    isTeam: true,
+    teamName: registration.teamName,
+    teamSize: registration.teamSize,
+    teamMembers: registration.teamMembers,
+    fee: registrationFee,
+    payment: paymentDetails
+  });
+});
+
+/**
+ * @desc Get team registration details by registration ID
+ * @route GET /api/events/team/:registrationId
+ */
+const getTeamRegistrationById = asyncHandler(async (req, res, next) => {
+  const { registrationId } = req.params;
+
+  const registration = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    include: {
+      student: {
+        select: { id: true, name: true, email: true, rollNo: true, department: true }
+      },
+      event: {
+        select: { id: true, title: true, date: true, time: true, venue: true, registrationFee: true, isTeamEvent: true, minTeamSize: true, maxTeamSize: true }
+      },
+      payment: true
+    }
+  });
+
+  if (!registration) {
+    throw new NotFoundError('Team registration not found');
+  }
+
+  return sendResponse(res, 200, 'Team registration retrieved successfully', {
+    registrationId: registration.id,
+    eventId: registration.eventId,
+    eventTitle: registration.event.title,
+    isTeam: registration.isTeam,
+    teamName: registration.teamName,
+    teamSize: registration.teamSize,
+    teamLeader: {
+      studentId: registration.studentId,
+      name: registration.fullName || registration.student.name,
+      enrollmentNumber: registration.enrollmentNumber || registration.student.rollNo,
+      collegeName: registration.collegeName,
+      department: registration.department || registration.student.department,
+      branch: registration.branch,
+      semester: registration.semester,
+      phone: registration.phoneNumber,
+      email: registration.student.email,
+    },
+    teamMembers: registration.teamMembers || [],
+    qrCodePass: registration.qrCodePass,
+    attendance: registration.attendance,
+    status: registration.status,
+    payment: registration.payment,
+  });
+});
+
+/**
+ * @desc Register for an event (handles both individual and team registrations)
  * @route POST /api/events/register
  */
 const registerForEvent = asyncHandler(async (req, res, next) => {
   if (!req.user || req.user.role !== 'STUDENT') {
     throw new BadRequestError('Only students can register for events');
+  }
+
+  // If team payload is provided, delegate to team registration handler
+  if (req.body.isTeam === true || req.body.isTeamRegistration === true || req.body.teamName) {
+    return registerTeamForEvent(req, res, next);
   }
 
   const { 
@@ -214,7 +454,11 @@ const registerForEvent = asyncHandler(async (req, res, next) => {
         department,
         branch,
         semester,
-        phoneNumber
+        phoneNumber,
+        isTeam: false,
+        teamName: null,
+        teamSize: 1,
+        teamMembers: null,
       }
     });
   } else {
@@ -230,7 +474,11 @@ const registerForEvent = asyncHandler(async (req, res, next) => {
         department,
         branch,
         semester,
-        phoneNumber
+        phoneNumber,
+        isTeam: false,
+        teamName: null,
+        teamSize: 1,
+        teamMembers: null,
       }
     });
   }
@@ -370,8 +618,11 @@ export {
   getEventsByCategory,
   searchEvents,
   registerForEvent,
+  registerTeamForEvent,
+  getTeamRegistrationById,
   cancelRegistration,
   getMyEvents,
   getUpcomingEvents,
   getCompletedEvents
 };
+

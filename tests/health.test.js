@@ -64,5 +64,25 @@ describe('API Health & System Status Tests', () => {
     const spec = await res.json();
     assert.ok(spec.servers.some(s => s.url === '/'));
     assert.ok(spec.servers.some(s => s.url === 'https://api.techno.rku.ac.in'));
+    assert.ok(spec.paths['/api/events/register/team']);
+    assert.ok(spec.paths['/api/events/team/{registrationId}']);
+  });
+
+  test('Team Registration: POST /api/events/register/team requires authentication (401)', async () => {
+    const res = await fetch(`${baseUrl}/api/events/register/team`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId: 'fake-id', teamName: 'Test Team' }),
+    });
+    assert.strictEqual(res.status, 401);
+  });
+
+  test('Team Registration: POST /api/events/team-register requires authentication (401)', async () => {
+    const res = await fetch(`${baseUrl}/api/events/team-register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId: 'fake-id', teamName: 'Test Team' }),
+    });
+    assert.strictEqual(res.status, 401);
   });
 });

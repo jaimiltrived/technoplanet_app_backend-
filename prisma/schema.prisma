@@ -136,6 +136,12 @@ model Registration {
   semester         String?
   phoneNumber      String?
 
+  // Team Registration Fields
+  isTeam           Boolean            @default(false)
+  teamName         String?
+  teamSize         Int?               @default(1)
+  teamMembers      Json?
+
   @@unique([studentId, eventId])
 }
 

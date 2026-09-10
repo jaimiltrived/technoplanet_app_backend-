@@ -169,6 +169,37 @@ const eventRegistrationSchema = z.object({
   eventId: z.string().min(1, 'Event ID is required').max(64)
 }).passthrough();
 
+/** Team member schema */
+const teamMemberSchema = z.object({
+  name: z.string().min(1, 'Member name is required').max(100).optional(),
+  fullName: z.string().max(100).optional(),
+  enrollmentNo: z.string().max(50).optional(),
+  enrollmentNumber: z.string().max(50).optional(),
+  department: z.string().max(100).optional(),
+  branch: z.string().max(100).optional(),
+  semester: z.string().max(50).optional(),
+  phone: z.string().max(25).optional(),
+  phoneNumber: z.string().max(25).optional()
+}).passthrough();
+
+/** Team registration body validation */
+const teamRegistrationSchema = z.object({
+  eventId: z.string().min(1, 'Event ID is required').max(64),
+  teamName: z.string().min(2, 'Team name must be at least 2 characters').max(100),
+  fullName: z.string().max(100).optional(),
+  enrollmentNumber: z.string().max(50).optional(),
+  collegeName: z.string().max(200).optional(),
+  department: z.string().max(100).optional(),
+  branch: z.string().max(100).optional(),
+  semester: z.string().max(50).optional(),
+  phoneNumber: z.string().max(25).optional(),
+  teamSize: z.number().int().min(1).max(50).optional(),
+  isTeam: z.boolean().optional(),
+  isTeamRegistration: z.boolean().optional(),
+  groupMembers: z.array(teamMemberSchema).optional(),
+  teamMembers: z.array(teamMemberSchema).optional()
+}).passthrough();
+
 export {
   studentRegisterSchema,
   loginSchema,
@@ -196,5 +227,8 @@ export {
   updateStudentProfileSchema,
   blockUserSchema,
   assignCoordinatorSchema,
-  eventRegistrationSchema
+  eventRegistrationSchema,
+  teamMemberSchema,
+  teamRegistrationSchema
 };
+

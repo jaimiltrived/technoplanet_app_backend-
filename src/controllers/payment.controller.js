@@ -20,15 +20,14 @@ const createOrder = asyncHandler(async (req, res, next) => {
     throw new NotFoundError('Registration not found');
   }
 
-  const fee = Number(registration.event.registrationFee);
-  if (fee <= 0) {
-    throw new BadRequestError('This event is free of charge');
-  }
-
-  // Find or create payment record
   let payment = await prisma.payment.findUnique({
     where: { registrationId }
   });
+
+  const fee = payment ? Number(payment.amount) : Number(registration.event.registrationFee);
+  if (fee <= 0) {
+    throw new BadRequestError('This event is free of charge');
+  }
 
   if (!payment) {
     payment = await prisma.payment.create({

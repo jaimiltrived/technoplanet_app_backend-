@@ -320,7 +320,7 @@ const options = {
       '/api/events/register': {
         post: {
           tags: ['Events'],
-          summary: 'Register Student For Event',
+          summary: 'Register Student For Event (Individual or Team)',
           security: [{ BearerAuth: [] }],
           requestBody: {
             required: true,
@@ -331,6 +331,58 @@ const options = {
             }
           },
           responses: { 201: { description: 'Registration initiated' } }
+        }
+      },
+      '/api/events/register/team': {
+        post: {
+          tags: ['Events'],
+          summary: 'Register Team / Group For Event',
+          security: [{ BearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['eventId', 'teamName'],
+                  properties: {
+                    eventId: { type: 'string' },
+                    teamName: { type: 'string' },
+                    fullName: { type: 'string' },
+                    enrollmentNumber: { type: 'string' },
+                    collegeName: { type: 'string' },
+                    department: { type: 'string' },
+                    branch: { type: 'string' },
+                    semester: { type: 'string' },
+                    phoneNumber: { type: 'string' },
+                    groupMembers: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          name: { type: 'string' },
+                          enrollmentNo: { type: 'string' },
+                          department: { type: 'string' },
+                          semester: { type: 'string' },
+                          phone: { type: 'string' }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          responses: { 201: { description: 'Team registration initiated' } }
+        }
+      },
+      '/api/events/team/{registrationId}': {
+        get: {
+          tags: ['Events'],
+          summary: 'Get Team Registration Details',
+          security: [{ BearerAuth: [] }],
+          parameters: [{ in: 'path', name: 'registrationId', required: true, schema: { type: 'string' } }],
+          responses: { 200: { description: 'Team details retrieved' } }
         }
       },
       '/api/events/register/{id}': {
