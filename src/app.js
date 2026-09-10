@@ -19,7 +19,7 @@ import coordinatorRoutes from './routes/coordinator.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import staffRoutes from './routes/staff.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
-
+import mailRoutes from './routes/mail.routes.js';
 
 const app = express();
 
@@ -110,6 +110,7 @@ app.use('/api/certificates', certificateRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/faculty', facultyRoutes);
+app.use('/api/faculty/mail', mailRoutes);
 app.use('/api/coordinator', coordinatorRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);

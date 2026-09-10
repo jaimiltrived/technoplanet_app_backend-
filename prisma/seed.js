@@ -7,6 +7,8 @@ async function main() {
   console.log('Seeding database...');
 
   // 1. Clear existing data
+  await prisma.mailLog.deleteMany({});
+  await prisma.mailTemplate.deleteMany({});
   await prisma.activityLog.deleteMany({});
   await prisma.feedback.deleteMany({});
   await prisma.fAQ.deleteMany({});
@@ -347,6 +349,67 @@ async function main() {
   });
 
   console.log('FAQs seeded.');
+
+  // 11. Mail Templates
+  await prisma.mailTemplate.createMany({
+    data: [
+      {
+        name: 'Event Reminder',
+        subject: 'Reminder: {{eventTitle}} is coming up!',
+        body: `<h2>Hello {{participantName}},</h2>
+<p>This is a friendly reminder that <strong>{{eventTitle}}</strong> is scheduled soon.</p>
+<p><strong>Date:</strong> {{eventDate}}<br/>
+<strong>Venue:</strong> {{eventVenue}}</p>
+<p>Please make sure to arrive on time. We look forward to seeing you there!</p>
+<p>Best regards,<br/>{{senderName}}<br/>RKU Technoplanet Team</p>`,
+        recipientType: 'students',
+      },
+      {
+        name: 'Registration Confirmation',
+        subject: 'You are registered for {{eventTitle}}!',
+        body: `<h2>Dear {{participantName}},</h2>
+<p>Your registration for <strong>{{eventTitle}}</strong> has been confirmed.</p>
+<p><strong>Date:</strong> {{eventDate}}<br/>
+<strong>Venue:</strong> {{eventVenue}}</p>
+<p>Don't forget to bring your QR code event pass for check-in.</p>
+<p>See you there!<br/>{{senderName}}<br/>RKU Technoplanet Team</p>`,
+        recipientType: 'students',
+      },
+      {
+        name: 'Winner Announcement',
+        subject: 'Results Declared: {{eventTitle}}',
+        body: `<h2>Dear {{participantName}},</h2>
+<p>The results for <strong>{{eventTitle}}</strong> have been declared!</p>
+<p>Please check your dashboard to view your scores and rankings.</p>
+<p>Congratulations to all participants for their wonderful performance!</p>
+<p>Best regards,<br/>{{senderName}}<br/>RKU Technoplanet Team</p>`,
+        recipientType: 'students',
+      },
+      {
+        name: 'General Notice',
+        subject: '{{eventTitle}} — Important Notice',
+        body: `<h2>Dear {{participantName}},</h2>
+<p>We have an important update regarding <strong>{{eventTitle}}</strong>.</p>
+<p>Please stay tuned to the app for further details.</p>
+<p>Thank you,<br/>{{senderName}}<br/>RKU Technoplanet Team</p>`,
+        recipientType: 'all',
+      },
+      {
+        name: 'Volunteer Briefing',
+        subject: 'Volunteer Briefing: {{eventTitle}}',
+        body: `<h2>Hi {{participantName}},</h2>
+<p>Thank you for volunteering at <strong>{{eventTitle}}</strong>.</p>
+<p><strong>Date:</strong> {{eventDate}}<br/>
+<strong>Venue:</strong> {{eventVenue}}</p>
+<p>Please report 30 minutes before the event starts for your briefing.</p>
+<p>Contact the coordinator if you have any questions.</p>
+<p>Best regards,<br/>{{senderName}}<br/>RKU Technoplanet Team</p>`,
+        recipientType: 'volunteers',
+      },
+    ],
+  });
+  console.log('Mail templates seeded.');
+
   console.log('\n✅ Database seeding complete!');
   console.log('\n--- Login Credentials ---');
   console.log('Students: student1@rku.ac.in / student2@rku.ac.in / ... → password: student123');

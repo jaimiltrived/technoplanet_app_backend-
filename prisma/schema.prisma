@@ -70,6 +70,7 @@ model Staff {
   assignedEvents     Event[]        @relation("EventCoordinator")
   volunteeredEvents  Event[]        @relation("EventVolunteers")
   sentAnnouncements  Announcement[]
+  mailLogs           MailLog[]
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 }
@@ -216,3 +217,29 @@ model ActivityLog {
   details   String   @db.Text
   createdAt DateTime @default(now())
 }
+
+model MailTemplate {
+  id            String   @id @default(uuid())
+  name          String   @unique
+  subject       String
+  body          String   @db.Text
+  recipientType String   @default("all")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model MailLog {
+  id              String   @id @default(uuid())
+  sentById        String
+  sentBy          Staff    @relation(fields: [sentById], references: [id])
+  eventId         String?
+  recipientType   String
+  subject         String
+  templateId      String?
+  totalRecipients Int
+  sentCount       Int      @default(0)
+  failedCount     Int      @default(0)
+  createdAt       DateTime @default(now())
+}
+
