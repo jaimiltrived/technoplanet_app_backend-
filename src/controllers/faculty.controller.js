@@ -114,14 +114,17 @@ const getAssignedEventById = asyncHandler(async (req, res, next) => {
  * @route GET /api/faculty/events/:eventId/participants
  */
 const getEventParticipants = asyncHandler(async (req, res, next) => {
-  if (!req.user || req.user.role !== 'FACULTY') {
+  if (!req.user || (req.user.role !== 'FACULTY' && req.user.role !== 'ADMIN')) {
     throw new ForbiddenError('Access denied');
   }
 
   const { eventId } = req.params;
   const rawSearch = req.query.search;
   const search = rawSearch ? String(rawSearch).trim().slice(0, 100) : null;
-  await checkEventOwnership(eventId, req.user.id);
+
+  if (req.user.role === 'FACULTY') {
+    await checkEventOwnership(eventId, req.user.id);
+  }
 
   const searchFilter = search
     ? {
@@ -135,21 +138,38 @@ const getEventParticipants = asyncHandler(async (req, res, next) => {
       }
     : {};
 
-  const participants = await prisma.registration.findMany({
-    where: {
-      eventId,
-      ...searchFilter
-    },
-    include: {
-      student: {
-        select: { id: true, name: true, email: true, rollNo: true, department: true, semester: true }
+  const [participants, scores] = await Promise.all([
+    prisma.registration.findMany({
+      where: {
+        eventId,
+        ...searchFilter
       },
-      payment: true
-    },
-    orderBy: { student: { name: 'asc' } }
+      include: {
+        student: {
+          select: { id: true, name: true, email: true, rollNo: true, department: true, semester: true }
+        },
+        payment: true
+      },
+      orderBy: { student: { name: 'asc' } }
+    }),
+    prisma.score.findMany({
+      where: { eventId }
+    })
+  ]);
+
+  const scoreMap = new Map(scores.map((s) => [s.studentId, s]));
+
+  const formattedParticipants = participants.map((p) => {
+    const scoreRecord = scoreMap.get(p.studentId);
+    return {
+      ...p,
+      score: scoreRecord ? Number(scoreRecord.points) : null,
+      points: scoreRecord ? Number(scoreRecord.points) : null,
+      rank: scoreRecord ? scoreRecord.rank : null,
+    };
   });
 
-  return sendResponse(res, 200, 'Event participants list retrieved successfully', participants);
+  return sendResponse(res, 200, 'Event participants list retrieved successfully', formattedParticipants);
 });
 
 /**
@@ -370,7 +390,7 @@ const getEventScores = asyncHandler(async (req, res, next) => {
     where: { eventId },
     include: {
       student: {
-        select: { name: true, rollNo: true, department: true }
+        select: { id: true, name: true, rollNo: true, department: true }
       }
     },
     orderBy: { points: 'desc' }
@@ -380,42 +400,191 @@ const getEventScores = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * @desc Declare event rankings (automates rank assignments based on points desc)
+ * @desc Declare event rankings (stores explicit rank assignments or auto-calculates by points desc)
  * @route POST /api/faculty/declare-rank
  */
 const declareRankings = asyncHandler(async (req, res, next) => {
-  const { eventId } = z.object({ eventId: z.string() }).parse(req.body);
-
-  if (req.user && req.user.role === 'FACULTY') {
-    await checkEventOwnership(eventId, req.user.id);
-  }
-
-  const scores = await prisma.score.findMany({
-    where: { eventId },
-    orderBy: { points: 'desc' }
+  const declareRankingsSchema = z.object({
+    eventId: z.string().min(1, 'Event ID is required'),
+    scores: z.array(
+      z.object({
+        studentId: z.string().optional(),
+        userId: z.string().optional(),
+        id: z.string().optional(),
+        rank: z.union([z.number(), z.string()]).nullable().optional(),
+        points: z.union([z.number(), z.string()]).optional(),
+        score: z.union([z.number(), z.string()]).optional(),
+      })
+    ).optional(),
+    ranks: z.record(z.string(), z.union([z.number(), z.string()]).nullable()).optional(),
+    ranksDeclared: z.boolean().optional(),
+    declareRanks: z.boolean().optional(),
+    rankingsDeclared: z.boolean().optional(),
   });
 
-  if (scores.length === 0) {
-    throw new BadRequestError('Cannot declare rankings: No student scores entered yet');
+  const {
+    eventId,
+    scores,
+    ranks,
+    ranksDeclared,
+    declareRanks,
+    rankingsDeclared,
+  } = declareRankingsSchema.parse(req.body);
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId }
+  });
+
+  if (!event) {
+    throw new NotFoundError('Event not found');
   }
 
-  // Update rankings (e.g. 1st, 2nd, 3rd, and so on)
-  const updatePromises = scores.map((score, index) => {
-    return prisma.score.update({
-      where: { id: score.id },
-      data: { rank: index + 1 }
+  if (req.user && req.user.role === 'FACULTY' && event.coordinatorId !== req.user.id) {
+    throw new ForbiddenError('Access Denied: You are not the coordinator for this event');
+  }
+
+  const shouldDeclare = rankingsDeclared ?? ranksDeclared ?? declareRanks ?? true;
+
+  // Build ranking items
+  let rankingItems = [];
+
+  if (Array.isArray(scores) && scores.length > 0) {
+    rankingItems = scores.map((item) => {
+      const rawId = item.studentId || item.userId || item.id;
+      const parsedRank = item.rank !== undefined && item.rank !== null && item.rank !== ''
+        ? parseInt(item.rank, 10)
+        : null;
+      const rawPoints = item.points !== undefined ? item.points : item.score;
+      const parsedPoints = rawPoints !== undefined && rawPoints !== null && rawPoints !== ''
+        ? parseFloat(rawPoints)
+        : undefined;
+
+      return {
+        studentId: rawId,
+        rank: parsedRank && parsedRank > 0 ? parsedRank : null,
+        points: parsedPoints !== undefined && !isNaN(parsedPoints) ? parsedPoints : undefined,
+      };
+    }).filter((item) => Boolean(item.studentId));
+  } else if (ranks && typeof ranks === 'object' && Object.keys(ranks).length > 0) {
+    rankingItems = Object.entries(ranks).map(([rawId, rankVal]) => {
+      const parsedRank = rankVal !== undefined && rankVal !== null && rankVal !== ''
+        ? parseInt(rankVal, 10)
+        : null;
+      return {
+        studentId: rawId,
+        rank: parsedRank && parsedRank > 0 ? parsedRank : null,
+      };
+    }).filter((item) => Boolean(item.studentId));
+  } else {
+    // Automatic fallback: rank based on points desc from existing Score records
+    const existingScores = await prisma.score.findMany({
+      where: { eventId },
+      orderBy: { points: 'desc' }
     });
+
+    if (existingScores.length === 0) {
+      throw new BadRequestError('Cannot declare rankings: No student scores entered yet');
+    }
+
+    rankingItems = existingScores.map((score, index) => ({
+      studentId: score.studentId,
+      rank: index + 1,
+      points: Number(score.points),
+    }));
+  }
+
+  // Resolve actual Student IDs (in case registration IDs were passed from the UI)
+  const resolvedItems = [];
+  for (const item of rankingItems) {
+    let studentId = item.studentId;
+    const student = await prisma.student.findUnique({ where: { id: studentId } });
+    if (!student) {
+      const reg = await prisma.registration.findUnique({ where: { id: studentId } });
+      if (reg) {
+        studentId = reg.studentId;
+      }
+    }
+    if (studentId) {
+      resolvedItems.push({
+        ...item,
+        studentId,
+      });
+    }
+  }
+
+  const rankedStudentIds = resolvedItems
+    .filter((item) => item.rank !== null && item.rank > 0)
+    .map((item) => item.studentId);
+
+  // Store rankings in database via transaction
+  await prisma.$transaction(async (tx) => {
+    // 1. Reset ranks for any students in this event not in the new ranked list
+    if (rankedStudentIds.length > 0) {
+      await tx.score.updateMany({
+        where: {
+          eventId,
+          studentId: { notIn: rankedStudentIds }
+        },
+        data: {
+          rank: null
+        }
+      });
+    }
+
+    // 2. Upsert each ranked student's score and rank
+    for (const item of resolvedItems) {
+      const existing = await tx.score.findUnique({
+        where: {
+          eventId_studentId: {
+            eventId,
+            studentId: item.studentId,
+          }
+        }
+      });
+
+      if (existing) {
+        await tx.score.update({
+          where: { id: existing.id },
+          data: {
+            rank: item.rank,
+            ...(item.points !== undefined && item.points > 0 ? { points: item.points } : {})
+          }
+        });
+      } else {
+        await tx.score.create({
+          data: {
+            eventId,
+            studentId: item.studentId,
+            rank: item.rank,
+            points: item.points !== undefined ? item.points : 0,
+          }
+        });
+      }
+    }
+
+    // 3. Mark rankingsDeclared and scoresEntered on Event
+    await tx.event.update({
+      where: { id: eventId },
+      data: {
+        rankingsDeclared: shouldDeclare,
+        scoresEntered: true,
+      }
+    });
+
+    // 4. Log activity
+    await tx.activityLog.create({
+      data: {
+        action: 'RANKINGS_DECLARED',
+        details: `Rankings ${shouldDeclare ? 'declared' : 'updated'} for event: ${event.title}`,
+      }
+    }).catch(() => {});
   });
 
-  await Promise.all(updatePromises);
-
-  // Mark rankingsDeclared on Event
-  await prisma.event.update({
-    where: { id: eventId },
-    data: { rankingsDeclared: true }
+  return sendResponse(res, 200, 'Event rankings declared and saved successfully', {
+    eventId,
+    rankingsDeclared: shouldDeclare,
+    declaredCount: rankedStudentIds.length,
   });
-
-  return sendResponse(res, 200, 'Event rankings calculated and declared successfully');
 });
 
 /**
@@ -430,10 +599,10 @@ const getEventRankings = asyncHandler(async (req, res, next) => {
   }
 
   const rankings = await prisma.score.findMany({
-    where: { eventId, rank: { not: null } },
+    where: { eventId, rank: { not: null, gt: 0 } },
     include: {
       student: {
-        select: { name: true, rollNo: true, department: true }
+        select: { id: true, name: true, rollNo: true, department: true, email: true }
       }
     },
     orderBy: { rank: 'asc' }

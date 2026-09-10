@@ -128,7 +128,15 @@ const getScores = asyncHandler(async (req, res, next) => {
     orderBy: { createdAt: 'desc' }
   });
 
-  return sendResponse(res, 200, 'Scores retrieved successfully', scores);
+  const formattedScores = scores.map((s) => ({
+    ...s,
+    rankingsDeclared: s.event?.rankingsDeclared ?? false,
+    ranksDeclared: s.event?.rankingsDeclared ?? false,
+    isDeclared: (s.event?.rankingsDeclared ?? false) && s.rank !== null && s.rank > 0,
+    rank: (s.event?.rankingsDeclared ?? false) ? s.rank : null,
+  }));
+
+  return sendResponse(res, 200, 'Scores retrieved successfully', formattedScores);
 });
 
 /**
@@ -153,7 +161,8 @@ const getScoreByEvent = asyncHandler(async (req, res, next) => {
       event: {
         select: {
           title: true,
-          date: true
+          date: true,
+          rankingsDeclared: true
         }
       }
     }
@@ -163,7 +172,13 @@ const getScoreByEvent = asyncHandler(async (req, res, next) => {
     throw new NotFoundError('No score recorded for this event');
   }
 
-  return sendResponse(res, 200, 'Event score retrieved successfully', score);
+  return sendResponse(res, 200, 'Event score retrieved successfully', {
+    ...score,
+    rankingsDeclared: score.event?.rankingsDeclared ?? false,
+    ranksDeclared: score.event?.rankingsDeclared ?? false,
+    isDeclared: (score.event?.rankingsDeclared ?? false) && score.rank !== null && score.rank > 0,
+    rank: (score.event?.rankingsDeclared ?? false) ? score.rank : null,
+  });
 });
 
 /**
@@ -184,9 +199,13 @@ const getRankByEvent = asyncHandler(async (req, res, next) => {
         studentId: req.user.id
       }
     },
-    select: {
-      points: true,
-      rank: true
+    include: {
+      event: {
+        select: {
+          title: true,
+          rankingsDeclared: true
+        }
+      }
     }
   });
 
@@ -194,9 +213,12 @@ const getRankByEvent = asyncHandler(async (req, res, next) => {
     throw new NotFoundError('No score/rank data found for this event');
   }
 
+  const isDeclared = (score.event?.rankingsDeclared ?? false) && score.rank !== null && score.rank > 0;
+
   return sendResponse(res, 200, 'Event rank retrieved successfully', {
     points: score.points,
-    rank: score.rank || 'Declaring soon'
+    rank: isDeclared ? score.rank : 'Declaring soon',
+    rankingsDeclared: score.event?.rankingsDeclared ?? false
   });
 });
 
@@ -216,21 +238,32 @@ const getLeaderboardByEvent = asyncHandler(async (req, res, next) => {
     throw new NotFoundError('Event not found');
   }
 
+  const whereClause = { eventId };
+  if (event.rankingsDeclared) {
+    whereClause.rank = { not: null, gt: 0 };
+  }
+
   const leaderboard = await prisma.score.findMany({
-    where: { eventId },
+    where: whereClause,
     include: {
       student: {
         select: {
+          id: true,
           name: true,
           rollNo: true,
           department: true
         }
       }
     },
-    orderBy: [
-      { points: 'desc' },
-      { rank: 'asc' }
-    ]
+    orderBy: event.rankingsDeclared
+      ? [
+          { rank: 'asc' },
+          { points: 'desc' }
+        ]
+      : [
+          { points: 'desc' },
+          { rank: 'asc' }
+        ]
   });
 
   return sendResponse(res, 200, 'Leaderboard retrieved successfully', {
