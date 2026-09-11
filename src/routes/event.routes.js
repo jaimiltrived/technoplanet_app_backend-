@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getEvents, getEventById, getEventsByCategory, searchEvents, registerForEvent, registerTeamForEvent, getTeamRegistrationById, cancelRegistration, getMyEvents, getUpcomingEvents, getCompletedEvents } from '../controllers/event.controller.js';
+import { getEventGallery } from '../controllers/eventGallery.controller.js';
 import { authenticate } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import { idParamSchema, categoryIdParamSchema, eventRegistrationSchema, teamRegistrationSchema, registrationIdParamSchema, searchQuerySchema } from '../utils/validation.js';
@@ -12,6 +13,7 @@ router.get('/completed', getCompletedEvents);
 router.get('/my-events', authenticate, getMyEvents);
 router.get('/search', validate({ query: searchQuerySchema }), searchEvents);
 router.get('/category/:categoryId', validate({ params: categoryIdParamSchema }), getEventsByCategory);
+router.get('/:eventId/gallery', getEventGallery); // Public event gallery
 router.get('/:id', validate({ params: idParamSchema }), getEventById);
 router.get('/', getEvents);
 

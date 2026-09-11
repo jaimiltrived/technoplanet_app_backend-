@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { getFacultyDashboard, getAssignedEvents, getAssignedEventById, getEventParticipants, getParticipantById, scanAttendance, markAttendanceManual, getEventAttendanceList, enterScore, editScore, getEventScores, declareRankings, getEventRankings, assignVolunteer, removeVolunteer, getVolunteersList, getFacultyList, getAssignedEventPayments, getFacultyReport } from '../controllers/faculty.controller.js';
+import { getEventGallery, uploadGalleryImages, deleteGalleryImage, updateGalleryCaption } from '../controllers/eventGallery.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
+import { uploadMultipleImages } from '../middlewares/upload.middleware.js';
 import { validate } from '../middlewares/validate.js';
 import { idParamSchema, eventIdParamSchema, searchQuerySchema } from '../utils/validation.js';
 
@@ -15,6 +17,12 @@ router.get('/events', getAssignedEvents);
 router.get('/events/:id', validate({ params: idParamSchema }), getAssignedEventById);
 router.get('/events/:eventId/participants', validate({ params: eventIdParamSchema, query: searchQuerySchema }), getEventParticipants);
 router.get('/participant/:id', validate({ params: idParamSchema }), getParticipantById);
+
+// Event Gallery management (coordinator only — enforced in controller)
+router.get('/events/:eventId/gallery', getEventGallery);
+router.post('/events/:eventId/gallery', uploadMultipleImages('images', 20, 10), uploadGalleryImages);
+router.delete('/events/:eventId/gallery/:imageId', deleteGalleryImage);
+router.patch('/events/:eventId/gallery/:imageId', updateGalleryCaption);
 
 // Attendance
 router.post('/attendance/scan', scanAttendance);

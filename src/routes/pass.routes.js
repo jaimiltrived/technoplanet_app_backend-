@@ -5,9 +5,7 @@ import { authenticate } from '../middlewares/auth.js';
 const router = Router();
 
 // Secure both routes with JWT authentication
-router.use(authenticate);
-
-router.get('/event-pass/:registrationId', getEventPass);
-router.get('/event-qr/:registrationId', getEventQr);
+router.get('/event-pass/:registrationId', authenticate, getEventPass);
+router.get('/event-qr/:registrationId', authenticate, getEventQr);
 
 export default router;

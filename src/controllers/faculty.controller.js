@@ -71,6 +71,10 @@ const getAssignedEvents = asyncHandler(async (req, res, next) => {
     where: { coordinatorId: req.user.id },
     include: {
       category: { select: { name: true } },
+      registrations: {
+        where: { status: { not: 'CANCELLED' } },
+        select: { id: true, status: true, isTeam: true, teamSize: true }
+      },
       _count: {
         select: { registrations: true }
       }
@@ -727,8 +731,9 @@ const getAssignedEventPayments = asyncHandler(async (req, res, next) => {
       registration: {
         select: {
           id: true,
+          eventId: true,
           student: { select: { name: true, rollNo: true } },
-          event: { select: { title: true } }
+          event: { select: { id: true, title: true } }
         }
       }
     },

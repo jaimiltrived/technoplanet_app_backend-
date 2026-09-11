@@ -71,6 +71,7 @@ model Staff {
   volunteeredEvents  Event[]        @relation("EventVolunteers")
   sentAnnouncements  Announcement[]
   mailLogs           MailLog[]
+  galleryUploads     EventGalleryImage[]
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 }
@@ -109,6 +110,7 @@ model Event {
   scores               Score[]
   announcements        Announcement[]
   feedbacks            Feedback[]
+  galleryImages        EventGalleryImage[]
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 }
@@ -247,5 +249,21 @@ model MailLog {
   sentCount       Int      @default(0)
   failedCount     Int      @default(0)
   createdAt       DateTime @default(now())
+}
+
+model EventGalleryImage {
+  id                 String   @id @default(uuid())
+  eventId            String
+  event              Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  uploadedById       String
+  uploadedBy         Staff    @relation(fields: [uploadedById], references: [id])
+  cloudinaryPublicId String
+  imageUrl           String
+  secureUrl          String
+  caption            String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([eventId])
 }
 

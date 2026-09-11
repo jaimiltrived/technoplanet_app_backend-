@@ -52,7 +52,7 @@ const getEvents = asyncHandler(async (req, res, next) => {
       },
       registrations: {
         where: { status: { not: 'CANCELLED' } },
-        select: { id: true, status: true }
+        select: { id: true, status: true, isTeam: true, teamSize: true }
       }
     },
     orderBy: { date: 'asc' }

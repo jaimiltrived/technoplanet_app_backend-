@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE `Event`
+    ADD COLUMN `isTeamEvent` BOOLEAN NOT NULL DEFAULT false,
+    ADD COLUMN `minTeamSize` INTEGER NOT NULL DEFAULT 1,
+    ADD COLUMN `maxTeamSize` INTEGER NOT NULL DEFAULT 1;
