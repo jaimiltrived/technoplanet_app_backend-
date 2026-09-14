@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAdminDashboard, getAdminStatistics, createEvent, updateEvent, deleteEvent, createCategory, getCategories, updateCategory, deleteCategory, getStudents, getStudentById, updateStudent, deleteStudent, createStaff, getStaffList, updateStaff, deleteStaff, getPayments, getPaymentById, refundPayment, getAuditLogs, getBlockedUsers, blockUser, unblockUser, createAnnouncement, getAnnouncements, addToGallery, removeFromGallery, getEventsReport, getPaymentsReport, getWinnersReport } from '../controllers/admin.controller.js';
+import { getAdminDashboard, getAdminStatistics, createEvent, updateEvent, deleteEvent, createCategory, getCategories, updateCategory, deleteCategory, getStudents, getStudentById, updateStudent, deleteStudent, createStaff, getStaffList, updateStaff, deleteStaff, getPayments, getPaymentById, refundPayment, importPayments, getAuditLogs, getBlockedUsers, blockUser, unblockUser, createAnnouncement, getAnnouncements, addToGallery, removeFromGallery, getEventsReport, getPaymentsReport, getWinnersReport } from '../controllers/admin.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { uploadSingleImage } from '../middlewares/upload.middleware.js';
 import { validate } from '../middlewares/validate.js';
@@ -45,9 +45,10 @@ router.get('/staff', getStaffList);
 router.put('/staff/:id', validate({ params: idParamSchema }), updateStaff);
 router.delete('/staff/:id', validate({ params: idParamSchema }), deleteStaff);
 
-// Payments & refund logs
+// Payments & refund logs & CSV import
 router.get('/payments', getPayments);
 router.get('/payments/:id', validate({ params: idParamSchema }), getPaymentById);
+router.post('/payments/import', importPayments);
 router.post('/payment/refund', refundPayment);
 
 // Security logs & blockings

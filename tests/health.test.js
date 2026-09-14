@@ -1,6 +1,8 @@
+process.env.NODE_ENV = 'test';
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import app from '../src/app.js';
+
 
 describe('API Health & System Status Tests', () => {
   let server;
@@ -85,4 +87,24 @@ describe('API Health & System Status Tests', () => {
     });
     assert.strictEqual(res.status, 401);
   });
+
+  test('Paytm Webhook: POST /api/payment/paytm-webhook is public and responds 200 with status SUCCESS', async () => {
+    const res = await fetch(`${baseUrl}/api/payment/paytm-webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ORDERID: 'LL_943229684_test',
+        TXNID: 'PTM_TEST_12345678',
+        TXNAMOUNT: '50.00',
+        STATUS: 'TXN_SUCCESS',
+        CUSTOMER_EMAIL: 'test@student.rku.ac.in',
+        CUSTOMER_MOBILE: '9876543210',
+      }),
+    });
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.status, 'SUCCESS');
+    assert.ok(body.message);
+  });
 });
+

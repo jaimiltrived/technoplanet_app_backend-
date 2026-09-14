@@ -283,17 +283,18 @@ const deleteStaff = asyncHandler(async (req, res, next) => {
   return sendResponse(res, 200, 'Staff member deleted successfully');
 });
 
-// ==========================================
-// 6. PAYMENTS & TRANSACTIONS
-// ==========================================
-
 const getPayments = asyncHandler(async (req, res, next) => {
   const payments = await prisma.payment.findMany({
     include: {
       registration: {
         select: {
-          student: { select: { name: true, rollNo: true } },
-          event: { select: { title: true } }
+          fullName: true,
+          phoneNumber: true,
+          collegeName: true,
+          department: true,
+          semester: true,
+          student: { select: { id: true, name: true, rollNo: true, email: true, phone: true } },
+          event: { select: { id: true, title: true } }
         }
       }
     },
@@ -308,7 +309,7 @@ const getPaymentById = asyncHandler(async (req, res, next) => {
     include: {
       registration: {
         include: {
-          student: { select: { name: true, rollNo: true, email: true } },
+          student: { select: { name: true, rollNo: true, email: true, phone: true } },
           event: { select: { title: true, date: true } }
         }
       }
@@ -330,6 +331,464 @@ const refundPayment = asyncHandler(async (req, res, next) => {
   });
 
   return sendResponse(res, 200, 'Payment refunded successfully (Simulated)', refunded);
+});
+
+/**
+ * Clean cell values by removing surrounding quotes and whitespace
+ */
+const cleanVal = (val) => {
+  if (val === null || val === undefined) return '';
+  return String(val).trim().replace(/^['"]|['"]$/g, '').trim();
+};
+
+/**
+ * Helper to normalize and extract fields from various CSV formats (Paytm / Technoplanet)
+ */
+const normalizePaymentRow = (row) => {
+  if (!row || typeof row !== 'object') return null;
+
+  // 1. Student Name
+  const studentName = cleanVal(
+    row.studentName ||
+    row['NAME OF TEAM LEADER/INDIVIDUAL'] ||
+    row['NAME OF TEAM LEADER'] ||
+    row['Student Name'] ||
+    row['student_name'] ||
+    row['Name'] ||
+    row['name'] ||
+    row['AccountName'] ||
+    row['Customer Name']
+  );
+
+  // 2. Email
+  const email = cleanVal(
+    row.email ||
+    row['Email ID'] ||
+    row['Email'] ||
+    row['userEmail'] ||
+    row['email_id'] ||
+    row['Customer Email'] ||
+    row['STUDENT EMAIL']
+  ).toLowerCase();
+
+  // 3. WhatsApp / Phone
+  const rawPhone = cleanVal(
+    row.whatsappNumber ||
+    row.phone ||
+    row['WhatsApp Number'] ||
+    row['WhatsApp'] ||
+    row['Phone No'] ||
+    row['Phone'] ||
+    row['userMobile'] ||
+    row['Mobile'] ||
+    row['mobileNumber']
+  );
+  const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10);
+
+  // 4. Event Name
+  let eventName = cleanVal(
+    row.eventName ||
+    row['Event Name'] ||
+    row['event_name'] ||
+    row['EVENT'] ||
+    row['Event'] ||
+    row['Events'] ||
+    row['Event Title']
+  );
+
+  if (!eventName) {
+    // Scan for any column containing 'selected value'
+    for (const key of Object.keys(row)) {
+      if (key.toLowerCase().includes('selected value') || key.toLowerCase().includes('selected_value')) {
+        const val = cleanVal(row[key]);
+        if (val) {
+          eventName = val;
+          break;
+        }
+      }
+    }
+  }
+
+  // If still not found, check payment columns with amount > 0 (e.g. "TREASURE HUNT.TREASURE HUNT payment amount")
+  if (!eventName) {
+    for (const [key, val] of Object.entries(row)) {
+      const lowerKey = key.toLowerCase();
+      if (lowerKey.includes('payment amount') || lowerKey.includes('amount')) {
+        const num = parseFloat(String(val).replace(/[^0-9.]/g, ''));
+        if (num > 0) {
+          const parts = key.split('.');
+          eventName = cleanVal(parts[0]);
+          break;
+        }
+      }
+    }
+  }
+
+  if (!eventName) {
+    eventName = 'Technoplanet Event';
+  }
+
+  // 5. Amount
+  let rawAmount = cleanVal(
+    row.amount ||
+    row['TxnAmount'] ||
+    row['TXN_AMOUNT'] ||
+    row['TOTAL_AMOUNT'] ||
+    row['BASE_AMOUNT'] ||
+    row['Amount'] ||
+    row['amount'] ||
+    row['SettledAmt']
+  );
+  if (!rawAmount) {
+    for (const [key, val] of Object.entries(row)) {
+      if (key.toLowerCase().includes('payment amount')) {
+        const num = parseFloat(String(val).replace(/[^0-9.]/g, ''));
+        if (num > 0) {
+          rawAmount = String(num);
+          break;
+        }
+      }
+    }
+  }
+  const amount = parseFloat(rawAmount.replace(/[^0-9.]/g, '')) || 0;
+
+  // 6. Payment Date
+  const rawDate = cleanVal(
+    row.paymentDate ||
+    row['TxnDate'] ||
+    row['TXN_DATE_STR'] ||
+    row['Payment Date'] ||
+    row['payment_date'] ||
+    row['SettledDate'] ||
+    row['UPDATED_ON'] ||
+    row['Date']
+  );
+  let paymentDate = new Date();
+  if (rawDate) {
+    const parsed = new Date(rawDate);
+    if (!isNaN(parsed.getTime())) {
+      paymentDate = parsed;
+    }
+  }
+
+  // 7. Transaction ID
+  const transactionId = cleanVal(
+    row.transactionId ||
+    row['TXN_ID'] ||
+    row['TxnId'] ||
+    row['Paytm TxnId'] ||
+    row['BankTxnID'] ||
+    row['OrderId'] ||
+    row['REF_TXN_ID'] ||
+    row['PRN']
+  );
+
+  // 8. Academic / College Details
+  const course = cleanVal(
+    row.course ||
+    row['COURSE NAME'] ||
+    row['Course'] ||
+    row['Department'] ||
+    row['Branch']
+  );
+  const semesterStr = cleanVal(
+    row.semester ||
+    row['SEMESTER'] ||
+    row['Semester']
+  );
+  const semNumber = parseInt(semesterStr.replace(/\D/g, ''), 10) || 1;
+
+  const institute = cleanVal(
+    row.institute ||
+    row['NAME OF INSTITUTE'] ||
+    row['Institute'] ||
+    row['College'] ||
+    row['collegeName']
+  );
+
+  // 9. Team members
+  const teamMembers = [];
+  ['TEAM MEMBER 2', 'TEAM MEMBER 3', 'TEAM MEMBER 4'].forEach((mKey) => {
+    const m = cleanVal(row[mKey]);
+    if (m) teamMembers.push(m);
+  });
+
+  return {
+    studentName: studentName || 'Participant',
+    email: email || '',
+    whatsappNumber: cleanPhone || '',
+    eventName,
+    amount,
+    paymentDate,
+    transactionId: transactionId || `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    course: course || 'General',
+    semester: semesterStr || `${semNumber}`,
+    semNumber,
+    institute: institute || 'RK University',
+    teamMembers
+  };
+};
+
+/**
+ * @desc Import CSV / Sheet payment transactions into database Payment table
+ * @route POST /api/admin/payments/import
+ */
+const importPayments = asyncHandler(async (req, res, next) => {
+  const { records } = req.body;
+
+  if (!records || !Array.isArray(records) || records.length === 0) {
+    throw new BadRequestError('Records array is required and cannot be empty');
+  }
+
+  // Ensure a default category exists for auto-creating unknown events
+  let defaultCategory = await prisma.category.findFirst();
+  if (!defaultCategory) {
+    defaultCategory = await prisma.category.create({
+      data: {
+        name: 'Technical',
+        description: 'Default category for imported technical events'
+      }
+    });
+  }
+
+  // Ensure default staff / admin coordinator exists
+  let defaultStaff = await prisma.staff.findFirst({ where: { role: 'ADMIN' } });
+  if (!defaultStaff) {
+    defaultStaff = await prisma.staff.findFirst();
+  }
+
+  let importedCount = 0;
+  let updatedCount = 0;
+  let skippedCount = 0;
+  let totalAmount = 0;
+  const errors = [];
+  const processedPayments = [];
+
+  // Default hashed password for auto-created students: Rku@1234
+  const defaultPasswordHash = await bcrypt.hash('Rku@1234', 10);
+
+  for (let i = 0; i < records.length; i++) {
+    const rawRow = records[i];
+    try {
+      const normalized = normalizePaymentRow(rawRow);
+      if (!normalized) {
+        skippedCount++;
+        continue;
+      }
+
+      const {
+        studentName,
+        email,
+        whatsappNumber,
+        eventName,
+        amount,
+        paymentDate,
+        transactionId,
+        course,
+        semester,
+        semNumber,
+        institute,
+        teamMembers
+      } = normalized;
+
+      // 1. Resolve Student: find by email or phone
+      let student = null;
+      if (email) {
+        student = await prisma.student.findUnique({ where: { email } });
+      }
+      if (!student && whatsappNumber) {
+        student = await prisma.student.findFirst({
+          where: { phone: { contains: whatsappNumber } }
+        });
+      }
+
+      // If student not found, create new Student
+      if (!student) {
+        const studentEmail = email || `${whatsappNumber || Date.now()}@student.techno.rku.ac.in`;
+        // Generate unique roll number
+        let rollNo = `RKU-${whatsappNumber ? whatsappNumber.slice(-6) : Math.floor(100000 + Math.random() * 900000)}`;
+        const existingRoll = await prisma.student.findUnique({ where: { rollNo } });
+        if (existingRoll) {
+          rollNo = `${rollNo}-${Math.floor(Math.random() * 900 + 100)}`;
+        }
+
+        student = await prisma.student.create({
+          data: {
+            name: studentName,
+            email: studentEmail,
+            phone: whatsappNumber || null,
+            rollNo,
+            department: course || 'General',
+            semester: semNumber,
+            password: defaultPasswordHash,
+            isEmailVerified: true
+          }
+        });
+      } else {
+        // Update missing phone if available
+        if (!student.phone && whatsappNumber) {
+          student = await prisma.student.update({
+            where: { id: student.id },
+            data: { phone: whatsappNumber }
+          });
+        }
+      }
+
+      // 2. Resolve Event: match title case-insensitively or contains core name
+      const cleanTitle = eventName.trim();
+      const coreName = cleanTitle.replace(/\(.*?\)/g, '').trim();
+
+      let event = await prisma.event.findFirst({
+        where: {
+          OR: [
+            { title: { equals: cleanTitle } },
+            { title: { contains: coreName } }
+          ]
+        }
+      });
+
+      // Auto-create event if not found
+      if (!event) {
+        event = await prisma.event.create({
+          data: {
+            title: cleanTitle,
+            description: `Imported event for ${cleanTitle}`,
+            categoryId: defaultCategory.id,
+            coordinatorId: defaultStaff ? defaultStaff.id : 'unknown',
+            date: paymentDate || new Date(),
+            time: '10:00 AM',
+            venue: 'RK University Campus',
+            maxParticipants: 200,
+            registrationFee: amount || 0,
+            registrationDeadline: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
+          }
+        });
+      }
+
+      // 3. Resolve Registration: find or create for [studentId, eventId]
+      let registration = await prisma.registration.findUnique({
+        where: {
+          studentId_eventId: {
+            studentId: student.id,
+            eventId: event.id
+          }
+        }
+      });
+
+      const qrCodePass = `PASS-${student.id.slice(0, 5)}-${event.id.slice(0, 5)}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+      if (!registration) {
+        registration = await prisma.registration.create({
+          data: {
+            studentId: student.id,
+            eventId: event.id,
+            status: 'REGISTERED',
+            attendance: 'NOT_MARKED',
+            qrCodePass,
+            fullName: studentName,
+            phoneNumber: whatsappNumber || student.phone,
+            collegeName: institute,
+            department: course,
+            branch: course,
+            semester,
+            isTeam: teamMembers.length > 0,
+            teamMembers: teamMembers.length > 0 ? teamMembers : null
+          }
+        });
+      } else if (registration.status !== 'REGISTERED') {
+        registration = await prisma.registration.update({
+          where: { id: registration.id },
+          data: { status: 'REGISTERED' }
+        });
+      }
+
+      // 4. Resolve Payment: upsert by transactionId or registrationId
+      let existingPayment = null;
+      if (transactionId) {
+        existingPayment = await prisma.payment.findUnique({
+          where: { transactionId }
+        });
+      }
+      if (!existingPayment) {
+        existingPayment = await prisma.payment.findUnique({
+          where: { registrationId: registration.id }
+        });
+      }
+
+      let savedPayment = null;
+      if (existingPayment) {
+        savedPayment = await prisma.payment.update({
+          where: { id: existingPayment.id },
+          data: {
+            amount,
+            status: 'SUCCESS',
+            transactionId: transactionId || existingPayment.transactionId,
+            paymentMethod: 'Paytm CSV Import',
+            paymentDate
+          },
+          include: {
+            registration: {
+              select: {
+                fullName: true,
+                phoneNumber: true,
+                student: { select: { name: true, rollNo: true, email: true, phone: true } },
+                event: { select: { title: true } }
+              }
+            }
+          }
+        });
+        updatedCount++;
+      } else {
+        savedPayment = await prisma.payment.create({
+          data: {
+            registrationId: registration.id,
+            amount,
+            status: 'SUCCESS',
+            transactionId,
+            paymentMethod: 'Paytm CSV Import',
+            paymentDate
+          },
+          include: {
+            registration: {
+              select: {
+                fullName: true,
+                phoneNumber: true,
+                student: { select: { name: true, rollNo: true, email: true, phone: true } },
+                event: { select: { title: true } }
+              }
+            }
+          }
+        });
+        importedCount++;
+      }
+
+      totalAmount += amount;
+      processedPayments.push(savedPayment);
+    } catch (rowError) {
+      console.error(`[CSV Import] Error at row ${i}:`, rowError.message);
+      errors.push({ row: i + 1, error: rowError.message });
+      skippedCount++;
+    }
+  }
+
+  // Create audit activity log
+  await prisma.activityLog.create({
+    data: {
+      userId: req.user?.id || 'admin',
+      userRole: req.user?.role || 'ADMIN',
+      action: 'PAYMENT_CSV_IMPORT',
+      details: `CSV import completed: ${importedCount} created, ${updatedCount} updated, ${skippedCount} skipped/failed. Total amount ₹${totalAmount}.`
+    }
+  }).catch((err) => console.error('[ActivityLog error]:', err.message));
+
+  return sendResponse(res, 200, `Successfully imported ${importedCount + updatedCount} payment transactions`, {
+    importedCount,
+    updatedCount,
+    skippedCount,
+    totalAmount,
+    errors,
+    payments: processedPayments
+  });
 });
 
 // ==========================================
@@ -554,6 +1013,7 @@ export {
   getPayments,
   getPaymentById,
   refundPayment,
+  importPayments,
   getAuditLogs,
   getBlockedUsers,
   blockUser,

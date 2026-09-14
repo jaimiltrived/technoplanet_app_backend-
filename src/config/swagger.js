@@ -521,6 +521,14 @@ const options = {
           responses: { 200: { description: 'Payment details' } }
         }
       },
+      '/api/payment/paytm-webhook': {
+        post: {
+          tags: ['Payments'],
+          summary: 'Paytm Payment Webhook (Server-to-Server Callback)',
+          description: 'Receives instant payment notifications from Paytm Payment Links/Forms and updates registration status',
+          responses: { 200: { description: 'Webhook processed' } }
+        }
+      },
 
       // 8. FEEDBACK (2 endpoints)
       '/api/feedback/{eventId}': {
