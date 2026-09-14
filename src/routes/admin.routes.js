@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAdminDashboard, getAdminStatistics, createEvent, updateEvent, deleteEvent, createCategory, getCategories, updateCategory, deleteCategory, getStudents, getStudentById, updateStudent, deleteStudent, createStaff, getStaffList, updateStaff, deleteStaff, getPayments, getPaymentById, refundPayment, importPayments, getAuditLogs, getBlockedUsers, blockUser, unblockUser, createAnnouncement, getAnnouncements, addToGallery, removeFromGallery, getEventsReport, getPaymentsReport, getWinnersReport } from '../controllers/admin.controller.js';
+import { getAdminDashboard, getAdminStatistics, createEvent, updateEvent, deleteEvent, createCategory, getCategories, updateCategory, deleteCategory, getStudents, getStudentById, updateStudent, deleteStudent, createStaff, getStaffList, updateStaff, resetStaffPassword, deleteStaff, getPayments, getPaymentById, refundPayment, importPayments, getAuditLogs, getBlockedUsers, blockUser, unblockUser, createAnnouncement, getAnnouncements, addToGallery, removeFromGallery, getEventsReport, getPaymentsReport, getWinnersReport } from '../controllers/admin.controller.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { uploadSingleImage } from '../middlewares/upload.middleware.js';
 import { validate } from '../middlewares/validate.js';
@@ -37,12 +37,14 @@ router.delete('/students/:id', validate({ params: idParamSchema }), deleteStuden
 router.post('/faculty', createStaff);
 router.get('/faculty', getStaffList);
 router.put('/faculty/:id', validate({ params: idParamSchema }), updateStaff);
+router.put('/faculty/:id/password', validate({ params: idParamSchema }), resetStaffPassword);
 router.delete('/faculty/:id', validate({ params: idParamSchema }), deleteStaff);
 
 // Staff aliases (matches ApiConfig.adminStaff)
 router.post('/staff', createStaff);
 router.get('/staff', getStaffList);
 router.put('/staff/:id', validate({ params: idParamSchema }), updateStaff);
+router.put('/staff/:id/password', validate({ params: idParamSchema }), resetStaffPassword);
 router.delete('/staff/:id', validate({ params: idParamSchema }), deleteStaff);
 
 // Payments & refund logs & CSV import

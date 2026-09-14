@@ -267,15 +267,50 @@ const updateStaff = asyncHandler(async (req, res, next) => {
   const data = z.object({
     name: z.string().optional(),
     phone: z.string().optional(),
-    role: z.enum(['FACULTY', 'VOLUNTEER', 'ADMIN']).optional()
+    role: z.enum(['FACULTY', 'VOLUNTEER', 'ADMIN']).optional(),
+    password: z.string().min(6, 'Password must be at least 6 characters long').optional()
   }).parse(req.body);
+
+  const existing = await prisma.staff.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('Staff member not found');
+
+  const updateData = { ...data };
+  if (data.password && data.password.trim() !== '') {
+    updateData.password = await bcrypt.hash(data.password, 10);
+    updateData.refreshToken = null; // Invalidate active session so new password is required
+  } else {
+    delete updateData.password;
+  }
 
   const staff = await prisma.staff.update({
     where: { id },
-    data
+    data: updateData,
+    select: { id: true, name: true, email: true, role: true, phone: true, blocked: true }
   });
 
   return sendResponse(res, 200, 'Staff member updated successfully', staff);
+});
+
+const resetStaffPassword = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const { password } = z.object({
+    password: z.string().min(6, 'Password must be at least 6 characters long')
+  }).parse(req.body);
+
+  const existing = await prisma.staff.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('Staff member not found');
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  await prisma.staff.update({
+    where: { id },
+    data: {
+      password: hashedPassword,
+      refreshToken: null
+    }
+  });
+
+  return sendResponse(res, 200, 'Staff member password reset successfully');
 });
 
 const deleteStaff = asyncHandler(async (req, res, next) => {
@@ -1009,6 +1044,7 @@ export {
   createStaff,
   getStaffList,
   updateStaff,
+  resetStaffPassword,
   deleteStaff,
   getPayments,
   getPaymentById,
