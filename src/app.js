@@ -39,7 +39,8 @@ const corsOptions = {
       'https://api.techno.rku.ac.in',
       'https://techno.rku.ac.in',
       'http://api.techno.rku.ac.in',
-      'http://techno.rku.ac.in'
+      'http://techno.rku.ac.in',
+      'https://admintechnoplanet.netlify.app'
     ];
 
     const envOrigins = (process.env.CORS_ORIGINS || '')

@@ -628,7 +628,7 @@ const assignVolunteer = asyncHandler(async (req, res, next) => {
   const { eventId, volunteerId } = schema.parse(req.body);
 
   if (req.user && req.user.role === 'FACULTY') {
-    await checkEventOwnership(eventId, req.user.id);
+    throw new ForbiddenError('Faculty members cannot assign volunteers. Only administrators can manage volunteer assignments.');
   }
 
   // Verify volunteer exists and has role VOLUNTEER or FACULTY
@@ -669,7 +669,7 @@ const removeVolunteer = asyncHandler(async (req, res, next) => {
   }
 
   if (req.user && req.user.role === 'FACULTY') {
-    await checkEventOwnership(String(eventId), req.user.id);
+    throw new ForbiddenError('Faculty members cannot remove volunteers. Only administrators can manage volunteer assignments.');
   }
 
   await prisma.event.update({
