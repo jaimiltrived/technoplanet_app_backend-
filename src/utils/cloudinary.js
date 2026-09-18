@@ -1,10 +1,19 @@
+import { v2 as cloudinary } from 'cloudinary';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Ensure Cloudinary SDK is initialized with env vars
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true,
+});
+
 /**
- * Upload image buffer to Catbox CDN with wsrv.nl CORS-safe caching as a reliable fallback
+ * Upload image buffer to public storage as a fallback when Cloudinary is unavailable
  */
 const uploadToFallback = async (buffer, mime = 'image/jpeg', filename = 'image.jpg') => {
   try {
@@ -20,28 +29,27 @@ const uploadToFallback = async (buffer, mime = 'image/jpeg', filename = 'image.j
     if (response.ok) {
       const cdnUrl = (await response.text()).trim();
       if (cdnUrl.startsWith('http')) {
-        const corsSafeUrl = `https://wsrv.nl/?url=${encodeURIComponent(cdnUrl)}`;
         const fallbackId = `fallback_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
         return {
           public_id: fallbackId,
-          url: corsSafeUrl,
-          secure_url: corsSafeUrl,
+          url: cdnUrl,
+          secure_url: cdnUrl,
           format: mime.split('/')[1] || 'jpg',
           bytes: buffer.length,
         };
       }
     }
   } catch (err) {
-    console.warn('[Storage] Catbox fallback upload error:', err.message);
+    console.warn('[Storage] Fallback upload error:', err.message);
   }
-  throw new Error('Image upload failed: Cloudinary is not configured and fallback storage was unreachable.');
+  throw new Error('Image upload failed: Cloudinary is not configured or reachable, and fallback storage was unreachable.');
 };
 
 /**
- * Upload an image (base64 string, data URL, or file buffer) to Cloudinary via REST API,
- * with automatic fallback to public CDN if Cloudinary credentials are not configured.
+ * Upload an image (base64 string, data URL, or file buffer) to Cloudinary via the official SDK stream,
+ * with automatic fallback if Cloudinary credentials are not configured.
  * @param {string|Buffer} fileInput - Image data URL, base64 string, or buffer
- * @param {Object} options - Upload options (folder, mimetype, etc.)
+ * @param {Object} options - Upload options (folder, mimetype, filename, etc.)
  * @returns {Promise<Object>} Image upload response object
  */
 export const uploadToCloudinary = async (fileInput, options = {}) => {
@@ -66,57 +74,36 @@ export const uploadToCloudinary = async (fileInput, options = {}) => {
     buffer = Buffer.from('');
   }
 
-  // If Cloudinary is NOT configured, use graceful fallback
-  if (!cloudName || cloudName === 'your_cloud_name' || !apiKey || !apiSecret) {
-    console.warn('[Storage] Cloudinary credentials missing in .env. Falling back to public CDN.');
-    return await uploadToFallback(buffer, mime, options.filename || `image_${Date.now()}.jpg`);
-  }
-
-  const folder = options.folder || 'rku_app';
-  const timestamp = Math.floor(Date.now() / 1000);
-
-  // Signature calculation: parameters sorted alphabetically
-  const paramsToSign = `folder=${folder}&timestamp=${timestamp}`;
-  const signature = crypto
-    .createHash('sha1')
-    .update(paramsToSign + apiSecret)
-    .digest('hex');
-
-  // Format buffer to Data URI if needed
-  let fileData = fileInput;
-  if (Buffer.isBuffer(fileInput)) {
-    fileData = `data:${mime};base64,${fileInput.toString('base64')}`;
-  }
-
-  try {
-    const formData = new URLSearchParams();
-    formData.append('file', fileData);
-    formData.append('api_key', apiKey);
-    formData.append('timestamp', timestamp.toString());
-    formData.append('signature', signature);
-    formData.append('folder', folder);
-
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.warn('[Storage] Cloudinary upload failed, using fallback:', data.error?.message);
-      return await uploadToFallback(buffer, mime, options.filename || `image_${Date.now()}.jpg`);
+  // If Cloudinary is configured, use official Cloudinary SDK upload_stream
+  if (cloudName && cloudName !== 'your_cloud_name' && apiKey && apiSecret) {
+    try {
+      const folder = options.folder || 'rku_app';
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder,
+            resource_type: 'image',
+          },
+          (error, uploadResult) => {
+            if (error) return reject(error);
+            resolve(uploadResult);
+          }
+        );
+        stream.end(buffer);
+      });
+      return result;
+    } catch (err) {
+      console.warn('[Storage] Cloudinary SDK upload error, trying fallback:', err.message);
     }
-
-    return data;
-  } catch (err) {
-    console.warn('[Storage] Cloudinary request error, using fallback:', err.message);
-    return await uploadToFallback(buffer, mime, options.filename || `image_${Date.now()}.jpg`);
+  } else {
+    console.warn('[Storage] Cloudinary credentials missing in .env. Falling back to public storage.');
   }
+
+  return await uploadToFallback(buffer, mime, options.filename || `image_${Date.now()}.jpg`);
 };
 
 /**
- * Delete an image from Cloudinary using REST API
+ * Delete an image from Cloudinary using the official SDK
  * @param {string} publicId - Cloudinary asset public_id
  * @returns {Promise<Object>} Cloudinary deletion result
  */
@@ -125,35 +112,8 @@ export const deleteFromCloudinary = async (publicId) => {
     return { result: 'ok' };
   }
 
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-  if (!cloudName || !apiKey || !apiSecret) {
-    return { result: 'ok' };
-  }
-
   try {
-    const timestamp = Math.floor(Date.now() / 1000);
-    const paramsToSign = `public_id=${publicId}&timestamp=${timestamp}`;
-    const signature = crypto
-      .createHash('sha1')
-      .update(paramsToSign + apiSecret)
-      .digest('hex');
-
-    const formData = new URLSearchParams();
-    formData.append('public_id', publicId);
-    formData.append('api_key', apiKey);
-    formData.append('timestamp', timestamp.toString());
-    formData.append('signature', signature);
-
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    const data = await response.json();
-    return data;
+    return await cloudinary.uploader.destroy(publicId);
   } catch (err) {
     console.warn('[Storage] Delete from Cloudinary failed:', err.message);
     return { result: 'error', message: err.message };

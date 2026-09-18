@@ -6,9 +6,7 @@ const passwordSchema = z.string()
   .regex(/[0-9]/, 'Password must contain at least one number');
 
 const studentRegisterSchema = z.object({
-  email: z.string().email('Invalid email address').refine((val) => val.endsWith('@rku.ac.in') || val.endsWith('.rku.ac.in'), {
-    message: 'Email must be an official RKU domain (e.g. @rku.ac.in)'
-  }),
+  email: z.string().email('Invalid email address'),
   password: passwordSchema,
   name: z.string().min(2, 'Name must be at least 2 characters long'),
   phone: z.string().optional(),
