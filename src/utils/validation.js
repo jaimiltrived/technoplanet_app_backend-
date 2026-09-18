@@ -10,7 +10,7 @@ const studentRegisterSchema = z.object({
   password: passwordSchema,
   name: z.string().min(2, 'Name must be at least 2 characters long'),
   phone: z.string().optional(),
-  rollNo: z.string().min(1, 'Roll number is required'),
+  rollNo: z.string().optional().default(''),
   department: z.string().min(2, 'Department is required'),
   semester: z.number().int().min(1).max(8)
 });
