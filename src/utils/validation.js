@@ -120,7 +120,7 @@ const createEventSchema = z.object({
   isFeatured: z.boolean().optional(),
   imageUrl: z.string().url().optional(),
   bannerUrl: z.string().url().optional(),
-  coordinatorId: z.string().max(64).optional(),
+  coordinatorId: z.string().max(64).optional().nullable(),
 }).passthrough();
 
 /** Update event body validation */
