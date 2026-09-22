@@ -111,7 +111,7 @@ const updateEvent = asyncHandler(async (req, res, next) => {
     title: z.string().min(3).optional(),
     description: z.string().min(10).optional(),
     categoryId: z.string().optional(),
-    coordinatorId: z.string().optional(),
+    coordinatorId: z.string().optional().nullable(),
     date: z.string().transform((val) => new Date(val)).optional(),
     time: z.string().optional(),
     venue: z.string().optional(),
