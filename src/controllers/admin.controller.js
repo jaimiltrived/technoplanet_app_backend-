@@ -444,11 +444,21 @@ const normalizePaymentRow = (row) => {
     }
   }
 
-  // If still not found, check payment columns with amount > 0 (e.g. "TREASURE HUNT.TREASURE HUNT payment amount")
+  // If still not found, check event-specific payment columns with amount > 0 (e.g. "TREASURE HUNT.TREASURE HUNT payment amount")
+  // Do NOT match generic transaction amount columns like TxnAmount, TXN_AMOUNT, TOTAL_AMOUNT, etc.
   if (!eventName) {
     for (const [key, val] of Object.entries(row)) {
       const lowerKey = key.toLowerCase();
-      if (lowerKey.includes('payment amount') || lowerKey.includes('amount')) {
+      const isEventPaymentCol =
+        (lowerKey.includes('.payment amount') || lowerKey.includes('_payment_amount') || lowerKey.endsWith('payment amount')) &&
+        !lowerKey.startsWith('txn') &&
+        !lowerKey.startsWith('total') &&
+        !lowerKey.startsWith('base') &&
+        !lowerKey.startsWith('settle') &&
+        !lowerKey.startsWith('commission') &&
+        !lowerKey.startsWith('refund');
+
+      if (isEventPaymentCol) {
         const num = parseFloat(String(val).replace(/[^0-9.]/g, ''));
         if (num > 0) {
           const parts = key.split('.');
@@ -459,7 +469,7 @@ const normalizePaymentRow = (row) => {
     }
   }
 
-  if (!eventName) {
+  if (!eventName || eventName.toLowerCase() === 'txnamount') {
     eventName = 'Technoplanet Event';
   }
 
@@ -660,11 +670,20 @@ const importPayments = asyncHandler(async (req, res, next) => {
           }
         });
       } else {
-        // Update missing phone if available
+        const studentUpdateData = {};
         if (!student.phone && whatsappNumber) {
+          studentUpdateData.phone = whatsappNumber;
+        }
+        if (course && (!student.department || student.department === 'General')) {
+          studentUpdateData.department = course;
+        }
+        if (semNumber && (!student.semester || student.semester === 1)) {
+          studentUpdateData.semester = semNumber;
+        }
+        if (Object.keys(studentUpdateData).length > 0) {
           student = await prisma.student.update({
             where: { id: student.id },
-            data: { phone: whatsappNumber }
+            data: studentUpdateData
           });
         }
       }
@@ -730,11 +749,27 @@ const importPayments = asyncHandler(async (req, res, next) => {
             teamMembers: teamMembers.length > 0 ? teamMembers : null
           }
         });
-      } else if (registration.status !== 'REGISTERED') {
-        registration = await prisma.registration.update({
-          where: { id: registration.id },
-          data: { status: 'REGISTERED' }
-        });
+      } else {
+        const regUpdate = {};
+        if (registration.status !== 'REGISTERED') {
+          regUpdate.status = 'REGISTERED';
+        }
+        if (institute && (!registration.collegeName || registration.collegeName === 'RK University')) {
+          regUpdate.collegeName = institute;
+        }
+        if (course && (!registration.department || registration.department === 'General')) {
+          regUpdate.department = course;
+          regUpdate.branch = course;
+        }
+        if (semester && !registration.semester) {
+          regUpdate.semester = semester;
+        }
+        if (Object.keys(regUpdate).length > 0) {
+          registration = await prisma.registration.update({
+            where: { id: registration.id },
+            data: regUpdate
+          });
+        }
       }
 
       // 4. Resolve Payment: upsert by transactionId or registrationId
@@ -766,8 +801,11 @@ const importPayments = asyncHandler(async (req, res, next) => {
               select: {
                 fullName: true,
                 phoneNumber: true,
-                student: { select: { name: true, rollNo: true, email: true, phone: true } },
-                event: { select: { title: true } }
+                collegeName: true,
+                department: true,
+                semester: true,
+                student: { select: { id: true, name: true, rollNo: true, email: true, phone: true } },
+                event: { select: { id: true, title: true } }
               }
             }
           }
@@ -788,8 +826,11 @@ const importPayments = asyncHandler(async (req, res, next) => {
               select: {
                 fullName: true,
                 phoneNumber: true,
-                student: { select: { name: true, rollNo: true, email: true, phone: true } },
-                event: { select: { title: true } }
+                collegeName: true,
+                department: true,
+                semester: true,
+                student: { select: { id: true, name: true, rollNo: true, email: true, phone: true } },
+                event: { select: { id: true, title: true } }
               }
             }
           }
