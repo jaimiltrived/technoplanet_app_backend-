@@ -24,6 +24,31 @@ const generateRefreshToken = (id, email, role) => {
   );
 };
 
+// Cookie configuration
+const isProduction = process.env.NODE_ENV === 'production';
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? 'strict' : 'lax',
+  path: '/',
+};
+
+const setAuthCookies = (res, accessToken, refreshToken) => {
+  res.cookie('rku_admin_token', accessToken, {
+    ...COOKIE_OPTIONS,
+    maxAge: 15 * 60 * 1000, // 15 minutes
+  });
+  res.cookie('rku_admin_refresh_token', refreshToken, {
+    ...COOKIE_OPTIONS,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+};
+
+const clearAuthCookies = (res) => {
+  res.clearCookie('rku_admin_token', { ...COOKIE_OPTIONS });
+  res.clearCookie('rku_admin_refresh_token', { ...COOKIE_OPTIONS });
+};
+
 /**
  * @desc Unified Login (Student & Staff)
  * @route POST /api/auth/login
@@ -84,6 +109,9 @@ const login = asyncHandler(async (req, res, next) => {
   // Omit password and refresh token from profile
   const { password: _, refreshToken: __, otpCode: ___, otpExpires: ____, ...profile } = user;
 
+  // Set tokens in httpOnly cookies
+  setAuthCookies(res, accessToken, refreshToken);
+
   return sendResponse(res, 200, 'Login successful', {
     accessToken,
     refreshToken,
@@ -115,6 +143,9 @@ const logout = asyncHandler(async (req, res, next) => {
     });
   }
 
+  // Clear auth cookies
+  clearAuthCookies(res);
+
   return sendResponse(res, 200, 'Logged out successfully');
 });
 
@@ -123,7 +154,14 @@ const logout = asyncHandler(async (req, res, next) => {
  * @route POST /api/auth/refresh-token
  */
 const refresh = asyncHandler(async (req, res, next) => {
-  const { refreshToken } = refreshTokenSchema.parse(req.body);
+  // Read refresh token from body OR cookie
+  let refreshToken = req.body.refreshToken;
+  if (!refreshToken && req.cookies && req.cookies.rku_admin_refresh_token) {
+    refreshToken = req.cookies.rku_admin_refresh_token;
+  }
+  if (!refreshToken) {
+    throw new UnauthorizedError('Refresh token is missing');
+  }
 
   try {
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET || 'supersecretkey_rku_technoplanet_2026_dev');
@@ -154,6 +192,9 @@ const refresh = asyncHandler(async (req, res, next) => {
         data: { refreshToken: newRefreshToken }
       });
     }
+
+    // Set new tokens in httpOnly cookies
+    setAuthCookies(res, newAccessToken, newRefreshToken);
 
     return sendResponse(res, 200, 'Token refreshed successfully', {
       accessToken: newAccessToken,

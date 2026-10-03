@@ -4,11 +4,19 @@ import { UnauthorizedError, ForbiddenError } from '../utils/customErrors.js';
 
 const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  let token = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (req.cookies && req.cookies.rku_admin_token) {
+    // Fallback: read access token from cookie
+    token = req.cookies.rku_admin_token;
+  }
+
+  if (!token) {
     return next(new UnauthorizedError('Access token is missing or invalid'));
   }
 
-  const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(
       token,
